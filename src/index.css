@@ -1,0 +1,151 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 214 20% 96%;
+    --foreground: 220 25% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 12%;
+
+    --primary: 213 56% 28%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 18% 92%;
+    --secondary-foreground: 220 20% 18%;
+
+    --muted: 214 14% 94%;
+    --muted-foreground: 215 12% 48%;
+
+    --accent: 210 40% 94%;
+    --accent-foreground: 213 56% 24%;
+
+    --destructive: 0 60% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 16% 91%;
+    --input: 214 16% 88%;
+    --ring: 213 56% 28%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 216 33% 10%;
+    --sidebar-foreground: 214 15% 62%;
+    --sidebar-primary: 210 50% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 216 28% 16%;
+    --sidebar-accent-foreground: 210 20% 88%;
+    --sidebar-border: 216 20% 16%;
+    --sidebar-ring: 213 56% 28%;
+
+    --success: 158 50% 38%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 85% 48%;
+    --warning-foreground: 0 0% 100%;
+    --info: 207 75% 48%;
+    --info-foreground: 0 0% 100%;
+
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  .dark {
+    --background: 220 30% 8%;
+    --foreground: 210 20% 92%;
+    --card: 220 26% 12%;
+    --card-foreground: 210 20% 92%;
+    --popover: 220 26% 12%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 210 55% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 22% 18%;
+    --secondary-foreground: 210 20% 90%;
+    --muted: 220 22% 16%;
+    --muted-foreground: 214 14% 52%;
+    --accent: 220 24% 20%;
+    --accent-foreground: 210 55% 68%;
+    --destructive: 0 58% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 22% 18%;
+    --input: 220 22% 18%;
+    --ring: 210 55% 52%;
+    --sidebar-background: 220 35% 6%;
+    --sidebar-foreground: 214 15% 55%;
+    --sidebar-primary: 210 55% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 28% 12%;
+    --sidebar-accent-foreground: 210 20% 85%;
+    --sidebar-border: 220 28% 12%;
+    --sidebar-ring: 210 55% 52%;
+    --success: 158 45% 34%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 80% 42%;
+    --warning-foreground: 0 0% 100%;
+    --info: 207 70% 45%;
+    --info-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+}
+
+@layer components {
+  .kpi-card {
+    @apply bg-card rounded-xl border border-border p-6 transition-all duration-200;
+  }
+  .kpi-card:hover {
+    box-shadow: 0 1px 8px 0 hsl(214 20% 50% / 0.08);
+  }
+  .status-badge {
+    @apply inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase;
+  }
+  .status-recebida {
+    @apply bg-accent text-accent-foreground;
+  }
+  .status-producao {
+    background-color: hsl(207 75% 48% / 0.1);
+    color: hsl(207 75% 42%);
+  }
+  .status-pronta {
+    background-color: hsl(158 50% 38% / 0.1);
+    color: hsl(158 50% 34%);
+  }
+  .status-enviada {
+    background-color: hsl(213 56% 28% / 0.08);
+    color: hsl(213 56% 28%);
+  }
+  .status-entregue {
+    background-color: hsl(158 50% 38% / 0.08);
+    color: hsl(158 50% 34%);
+  }
+  .status-pendencia {
+    background-color: hsl(38 85% 48% / 0.1);
+    color: hsl(38 75% 38%);
+  }
+  .status-cancelada {
+    background-color: hsl(0 60% 48% / 0.08);
+    color: hsl(0 60% 42%);
+  }
+  .table-header {
+    @apply text-[11px] font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+  .section-title {
+    @apply text-xs font-semibold uppercase tracking-widest text-muted-foreground;
+  }
+  .page-card {
+    @apply rounded-xl border border-border bg-card;
+  }
+}
