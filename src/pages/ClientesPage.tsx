@@ -3,6 +3,7 @@ import AppLayout from '@/components/AppLayout';
 import { EmptyState } from '@/components/EmptyState';
 import { clientes, formatDate, ordensServico, formatCurrency } from '@/data/mockData';
 import { useApp } from '@/contexts/AppContext';
+import { isParcelaVencida } from '@/lib/financialStatus';
 import { Input } from '@/components/ui/input';
 import { Search, Plus, Users, MoreHorizontal, Eye, FileText, DollarSign, AlertTriangle, Phone, Mail, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -38,7 +39,7 @@ export default function ClientesPage() {
     const parcelas = osCliente.flatMap(os => os.pagamento?.parcelas || []);
     const pagas = parcelas.filter(p => p.status === 'paga');
     const pendentes = parcelas.filter(p => p.status === 'pendente');
-    const vencidas = pendentes.filter(p => p.vencimento < '2025-04-12');
+    const vencidas = pendentes.filter(p => isParcelaVencida(p));
     return {
       totalOS: osCliente.length,
       valorTotal: osCliente.reduce((s, os) => s + os.valorTotal, 0),

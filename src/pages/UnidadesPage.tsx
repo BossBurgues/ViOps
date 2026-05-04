@@ -1,5 +1,6 @@
 import AppLayout from '@/components/AppLayout';
 import { unidades, ordensServico, formatCurrency } from '@/data/mockData';
+import { isParcelaVencida } from '@/lib/financialStatus';
 import { useApp } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Plus, MapPin, Phone, FileText, DollarSign, AlertTriangle, TrendingUp, Users } from 'lucide-react';
@@ -30,7 +31,7 @@ export default function UnidadesPage() {
             const osCount = osUnit.length;
             const fat = osUnit.reduce((s, os) => s + os.valorTotal, 0);
             const parcelas = osUnit.flatMap(os => os.pagamento?.parcelas || []);
-            const vencidas = parcelas.filter(p => p.status === 'pendente' && p.vencimento < '2025-04-12');
+            const vencidas = parcelas.filter(p => isParcelaVencida(p));
             const pendencias = osUnit.filter(os => os.status === 'pendencia').length;
             const emProducao = osUnit.filter(os => os.status === 'producao').length;
 

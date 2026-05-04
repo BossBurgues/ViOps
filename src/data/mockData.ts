@@ -1,4 +1,8 @@
-import { Cliente, OrdemServico, Unidade, User, Rede } from './types';
+import { Cliente, OrdemServico, Unidade, User, Rede, OSStatus, OS_STATUS_LABELS } from './types';
+
+// Re-export formatters from lib/utils for backward compatibility.
+// All new code should import directly from '@/lib/utils'.
+export { formatCurrency, formatDate, formatDatetime, TODAY_ISO } from '@/lib/utils';
 
 export const rede: Rede = {
   id: 'r1',
@@ -40,9 +44,10 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os1', numero: 'OS-2025-0001', clienteId: 'c1', clienteNome: 'Maria Helena Souza',
     unidadeId: 'u1', unidadeNome: 'Visual Premium - Centro', status: 'entregue',
+    origemVenda: 'otica',
     dataCriacao: '2025-03-01', dataPrevisao: '2025-03-08', dataEntrega: '2025-03-07',
     valorTotal: 1850.00, observacoes: 'Lentes multifocais com antirreflexo premium',
-    vendedorId: 'usr3', vendedorNome: 'Fernando Costa',
+    vendedorId: 'usr3', vendedorNome: 'Fernando Costa', prioridade: 'normal',
     itens: [
       { id: 'i1', descricao: 'Armacao Titanium Classic', tipo: 'Armacao', quantidade: 1, valorUnitario: 650.00 },
       { id: 'i2', descricao: 'Lentes Multifocais Varilux X', tipo: 'Lente', quantidade: 2, valorUnitario: 600.00 },
@@ -66,9 +71,10 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os2', numero: 'OS-2025-0002', clienteId: 'c2', clienteNome: 'Jose Carlos Pereira',
     unidadeId: 'u2', unidadeNome: 'Visual Premium - Batel', status: 'producao',
+    origemVenda: 'otica',
     dataCriacao: '2025-04-02', dataPrevisao: '2025-04-10',
     valorTotal: 2340.00, observacoes: 'Oculos de sol com grau, lentes transitions',
-    vendedorId: 'usr4', vendedorNome: 'Juliana Ribeiro',
+    vendedorId: 'usr4', vendedorNome: 'Juliana Ribeiro', prioridade: 'normal',
     itens: [
       { id: 'i3', descricao: 'Armacao Ray-Ban Aviator', tipo: 'Armacao', quantidade: 1, valorUnitario: 890.00 },
       { id: 'i4', descricao: 'Lentes Transitions Gen 8', tipo: 'Lente', quantidade: 2, valorUnitario: 725.00 },
@@ -90,9 +96,10 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os3', numero: 'OS-2025-0003', clienteId: 'c3', clienteNome: 'Ana Paula Rodrigues',
     unidadeId: 'u1', unidadeNome: 'Visual Premium - Centro', status: 'pronta',
+    origemVenda: 'otica',
     dataCriacao: '2025-04-03', dataPrevisao: '2025-04-11',
     valorTotal: 980.00, observacoes: 'Lentes simples com blue light',
-    vendedorId: 'usr3', vendedorNome: 'Fernando Costa',
+    vendedorId: 'usr3', vendedorNome: 'Fernando Costa', prioridade: 'normal',
     itens: [
       { id: 'i5', descricao: 'Armacao Acetato Feminina', tipo: 'Armacao', quantidade: 1, valorUnitario: 380.00 },
       { id: 'i6', descricao: 'Lentes Blue Light Filter', tipo: 'Lente', quantidade: 2, valorUnitario: 300.00 },
@@ -112,9 +119,28 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os4', numero: 'OS-2025-0004', clienteId: 'c4', clienteNome: 'Roberto Martins',
     unidadeId: 'u4', unidadeNome: 'Visual Premium - Londrina', status: 'pendencia',
+    origemVenda: 'externa',
     dataCriacao: '2025-04-05', dataPrevisao: '2025-04-14',
-    valorTotal: 3200.00, observacoes: 'Aguardando confirmacao de receita atualizada',
-    vendedorId: 'usr8', vendedorNome: 'Lucia Ferreira',
+    valorTotal: 3200.00, observacoes: 'Aguardando confirmacao de receita atualizada — venda externa',
+    vendedorId: 'usr8', vendedorNome: 'Lucia Ferreira', prioridade: 'alta',
+    factoryRef: {
+      lote: 'LOT-2025-04-A',
+      externalId: 'FAB-04A-0031',
+      calctoolRxId: 'RX-2025-04-0031',
+      calctoolRxRegistradoEm: '2025-04-06T08:15:00',
+      sistemaExternoNome: 'Zeiss Visustore',
+      sistemaExternoId: 'ZVS-9921-A',
+      baixaExternaRealizada: false,
+      producaoStatus: 'aguardando',
+      prioridadeFabrica: 'alta',
+      dataEnvioFabrica: '2025-04-06T08:00:00',
+      observacoes: 'Pendente receita — aguardar confirmação antes de cortar',
+      historico: [
+        { id: 'fh1', timestamp: '2025-04-06T08:00:00', tipo: 'entrada', descricao: 'OS recebida na fábrica', usuario: 'Marcos Silva' },
+        { id: 'fh2', timestamp: '2025-04-06T08:15:00', tipo: 'calctool', descricao: 'Registrado no Calctool RX 2.0 — RX-2025-04-0031', usuario: 'Marcos Silva', producaoStatus: 'aguardando' },
+        { id: 'fh3', timestamp: '2025-04-06T09:30:00', tipo: 'observacao', descricao: 'Receita com data vencida — produção suspensa aguardando nova receita', usuario: 'Marcos Silva' },
+      ],
+    },
     itens: [
       { id: 'i7', descricao: 'Armacao Prada SPR 01V', tipo: 'Armacao', quantidade: 1, valorUnitario: 1400.00 },
       { id: 'i8', descricao: 'Lentes Zeiss Individual 2', tipo: 'Lente', quantidade: 2, valorUnitario: 900.00 },
@@ -138,9 +164,10 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os5', numero: 'OS-2025-0005', clienteId: 'c5', clienteNome: 'Fernanda Lima Castro',
     unidadeId: 'u3', unidadeNome: 'Visual Premium - Shopping Barigui', status: 'recebida',
+    origemVenda: 'otica',
     dataCriacao: '2025-04-09', dataPrevisao: '2025-04-17',
     valorTotal: 1560.00, observacoes: 'Cliente VIP, prioridade na producao',
-    vendedorId: 'usr7', vendedorNome: 'Andre Souza',
+    vendedorId: 'usr7', vendedorNome: 'Andre Souza', prioridade: 'urgente',
     itens: [
       { id: 'i9', descricao: 'Armacao Gucci GG0034O', tipo: 'Armacao', quantidade: 1, valorUnitario: 760.00 },
       { id: 'i10', descricao: 'Lentes Antirreflexo Crizal', tipo: 'Lente', quantidade: 2, valorUnitario: 400.00 },
@@ -159,9 +186,10 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os6', numero: 'OS-2025-0006', clienteId: 'c6', clienteNome: 'Paulo Henrique Dias',
     unidadeId: 'u1', unidadeNome: 'Visual Premium - Centro', status: 'enviada',
+    origemVenda: 'otica',
     dataCriacao: '2025-04-01', dataPrevisao: '2025-04-09',
     valorTotal: 1120.00, observacoes: '',
-    vendedorId: 'usr3', vendedorNome: 'Fernando Costa',
+    vendedorId: 'usr3', vendedorNome: 'Fernando Costa', prioridade: 'normal',
     itens: [
       { id: 'i11', descricao: 'Armacao Metal Classica', tipo: 'Armacao', quantidade: 1, valorUnitario: 320.00 },
       { id: 'i12', descricao: 'Lentes Progressivas Hoya', tipo: 'Lente', quantidade: 2, valorUnitario: 400.00 },
@@ -182,9 +210,27 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os7', numero: 'OS-2025-0007', clienteId: 'c7', clienteNome: 'Claudia Beatriz Ferreira',
     unidadeId: 'u2', unidadeNome: 'Visual Premium - Batel', status: 'producao',
+    origemVenda: 'externa',
     dataCriacao: '2025-04-07', dataPrevisao: '2025-04-15',
-    valorTotal: 4500.00, observacoes: 'Duas armacoes, lentes premium',
-    vendedorId: 'usr4', vendedorNome: 'Juliana Ribeiro',
+    valorTotal: 4500.00, observacoes: 'Duas armacoes, lentes premium — cliente externo',
+    vendedorId: 'usr4', vendedorNome: 'Juliana Ribeiro', prioridade: 'normal',
+    factoryRef: {
+      lote: 'LOT-2025-04-B',
+      externalId: 'FAB-04B-0047',
+      calctoolRxId: 'RX-2025-04-0047',
+      calctoolRxRegistradoEm: '2025-04-08T07:45:00',
+      sistemaExternoNome: 'Essilor Consultant',
+      sistemaExternoId: 'ESS-CLN-7742',
+      baixaExternaRealizada: false,
+      producaoStatus: 'em_corte',
+      prioridadeFabrica: 'normal',
+      dataEnvioFabrica: '2025-04-08T07:30:00',
+      historico: [
+        { id: 'fh4', timestamp: '2025-04-08T07:30:00', tipo: 'entrada', descricao: 'OS recebida na fábrica', usuario: 'Marcos Silva' },
+        { id: 'fh5', timestamp: '2025-04-08T07:45:00', tipo: 'calctool', descricao: 'Registrado no Calctool RX 2.0 — RX-2025-04-0047', usuario: 'Marcos Silva', producaoStatus: 'aguardando' },
+        { id: 'fh6', timestamp: '2025-04-08T10:00:00', tipo: 'status_change', descricao: 'Iniciado processo de corte das lentes', usuario: 'Carlos Laboratorio', producaoStatus: 'em_corte' },
+      ],
+    },
     itens: [
       { id: 'i13', descricao: 'Armacao Tom Ford FT5401', tipo: 'Armacao', quantidade: 1, valorUnitario: 1800.00 },
       { id: 'i14', descricao: 'Armacao Dior Montaigne', tipo: 'Armacao', quantidade: 1, valorUnitario: 1200.00 },
@@ -209,9 +255,10 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os8', numero: 'OS-2025-0008', clienteId: 'c8', clienteNome: 'Sergio Luiz Oliveira',
     unidadeId: 'u1', unidadeNome: 'Visual Premium - Centro', status: 'recebida',
+    origemVenda: 'otica',
     dataCriacao: '2025-04-10', dataPrevisao: '2025-04-18',
     valorTotal: 890.00, observacoes: 'Oculos de leitura simples',
-    vendedorId: 'usr3', vendedorNome: 'Fernando Costa',
+    vendedorId: 'usr3', vendedorNome: 'Fernando Costa', prioridade: 'normal',
     itens: [
       { id: 'i16', descricao: 'Armacao Leve Flexivel', tipo: 'Armacao', quantidade: 1, valorUnitario: 290.00 },
       { id: 'i17', descricao: 'Lentes Visao Simples', tipo: 'Lente', quantidade: 2, valorUnitario: 300.00 },
@@ -226,17 +273,123 @@ export const ordensServico: OrdemServico[] = [
       ],
     },
   },
+  // -----------------------------------------------------------------
+  // OS9 — Cobrança híbrida: entrada em dinheiro + saldo por boleto Sicoob
+  // Demonstrates: valorEntrada, metodoPagamentoComplementar, Boleto Sicoob-ready
+  // -----------------------------------------------------------------
+  {
+    id: 'os9', numero: 'OS-2025-0009', clienteId: 'c3', clienteNome: 'Ana Paula Rodrigues',
+    unidadeId: 'u2', unidadeNome: 'Visual Premium - Batel', status: 'pronta',
+    origemVenda: 'externa',
+    localAcaoExterna: 'Empresa Tec & Cia — Setor RH',
+    dataCriacao: '2025-04-08', dataPrevisao: '2025-04-16',
+    valorTotal: 2400.00,
+    observacoes: 'Venda externa — entrada em dinheiro na visita. Saldo em boleto Sicoob a vencer em 30 dias.',
+    vendedorId: 'usr4', vendedorNome: 'Juliana Ribeiro', prioridade: 'alta',
+    itens: [
+      { id: 'i18', descricao: 'Armação Ray-Ban RB5228', tipo: 'Armacao' as const, quantidade: 1, valorUnitario: 900.00 },
+      { id: 'i19', descricao: 'Lentes Transitions Signature Gen 8', tipo: 'Lente' as const, quantidade: 2, valorUnitario: 750.00 },
+    ],
+    historico: [
+      { id: 'h21', data: '2025-04-08 10:00', status: 'recebida' as const, descricao: 'OS criada via venda externa', usuario: 'Juliana Ribeiro' },
+      { id: 'h22', data: '2025-04-09 08:30', status: 'producao' as const, descricao: 'Em produção', usuario: 'Marcos Silva' },
+      { id: 'h23', data: '2025-04-14 15:00', status: 'pronta' as const, descricao: 'Pronta para entrega', usuario: 'Marcos Silva' },
+    ],
+    pagamento: {
+      id: 'p9', osId: 'os9',
+      formaPagamento: 'Entrada Dinheiro + Boleto Sicoob',
+      metodo: 'dinheiro' as const,
+      valorTotal: 2400.00,
+      valorEntrada: 900.00,
+      metodoPagamentoComplementar: 'boleto' as const,
+      metodoPagamentoComplementarLabel: 'Boleto Sicoob',
+      valorComplementar: 1500.00,
+      observacoes: 'Entrada R$ 900,00 paga na visita. Saldo R$ 1.500,00 em boleto Sicoob a vencer em 30 dias da entrega.',
+      parcelas: [
+        {
+          id: 'pc29', numero: 1, valor: 900.00, vencimento: '2025-04-08',
+          status: 'paga' as const, dataPagamento: '2025-04-08', metodo: 'dinheiro' as const,
+        },
+        {
+          id: 'pc30', numero: 2, valor: 1500.00, vencimento: '2025-05-16',
+          status: 'pendente' as const, metodo: 'boleto' as const,
+          boleto: {
+            id: 'bol01', banco: 'Sicoob',
+            nossoNumero: '0000099-1',
+            agencia: '0001',
+            contaCedente: '12345-6',
+            nomeCedente: 'Visual Premium Otica Ltda',
+            nomeSacado: 'Ana Paula Rodrigues',
+            cpfCnpjSacado: '345.678.901-23',
+            codigoBarras: '75691.23450 00001.234567 00000.990001 1 99920000150000',
+            linhaDigitavel: '75691.23450 00001.234567 00000.990001 1 99920000150000',
+            status: 'emitido' as const,
+            valorNominal: 1500.00,
+            vencimento: '2025-05-16',
+            emitidoEm: '2025-04-14T16:00:00',
+            url: '/boletos/bol01.pdf',
+            instrucoes: 'Não receber após vencimento. Após vencimento cobrar multa de 2% + 0,033% ao dia.',
+          },
+        },
+      ],
+    },
+  },
+  // -----------------------------------------------------------------
+  // OS10 — Cobrança híbrida: entrada em Pix + saldo por link Mercado Pago
+  // Demonstrates: PaymentIntent com status 'enviado' (gerado, não pago)
+  // -----------------------------------------------------------------
+  {
+    id: 'os10', numero: 'OS-2025-0010', clienteId: 'c6', clienteNome: 'Paulo Henrique Dias',
+    unidadeId: 'u1', unidadeNome: 'Visual Premium - Centro', status: 'recebida',
+    origemVenda: 'otica',
+    dataCriacao: '2025-04-11', dataPrevisao: '2025-04-19',
+    valorTotal: 1750.00,
+    observacoes: 'Cliente pagou entrada no Pix. Saldo enviado via link Mercado Pago. Aguardando confirmação.',
+    vendedorId: 'usr3', vendedorNome: 'Fernando Costa', prioridade: 'normal',
+    itens: [
+      { id: 'i20', descricao: 'Armação Grazi Collection GZ3090', tipo: 'Armacao' as const, quantidade: 1, valorUnitario: 550.00 },
+      { id: 'i21', descricao: 'Lentes Essilor Anti-Reflexo Crizal', tipo: 'Lente' as const, quantidade: 2, valorUnitario: 600.00 },
+    ],
+    historico: [
+      { id: 'h24', data: '2025-04-11 14:20', status: 'recebida' as const, descricao: 'OS criada — entrada Pix confirmada', usuario: 'Fernando Costa' },
+    ],
+    pagamento: {
+      id: 'p10', osId: 'os10',
+      formaPagamento: 'Entrada Pix + Link Mercado Pago',
+      metodo: 'pix' as const,
+      valorTotal: 1750.00,
+      valorEntrada: 550.00,
+      metodoPagamentoComplementar: 'link_pagamento' as const,
+      metodoPagamentoComplementarLabel: 'Link Mercado Pago',
+      valorComplementar: 1200.00,
+      observacoes: 'Entrada R$ 550,00 via Pix confirmada. Link de R$ 1.200,00 enviado pelo WhatsApp. Aguardando pagamento.',
+      parcelas: [
+        {
+          id: 'pc31', numero: 1, valor: 550.00, vencimento: '2025-04-11',
+          status: 'paga' as const, dataPagamento: '2025-04-11', metodo: 'pix' as const,
+        },
+        {
+          id: 'pc32', numero: 2, valor: 1200.00, vencimento: '2025-04-18',
+          status: 'pendente' as const, metodo: 'link_pagamento' as const,
+          paymentIntent: {
+            id: 'pi01',
+            provider: 'mercado_pago' as const,
+            externalId: 'MP-CHR-00912345',
+            status: 'enviado' as const,
+            url: 'https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=00912345',
+            geradoEm: '2025-04-11T14:35:00',
+            enviadoEm: '2025-04-11T14:40:00',
+            valor: 1200.00,
+            expiresAt: '2025-04-18T23:59:59',
+          },
+        },
+      ],
+    },
+  },
 ];
 
-export const statusLabels: Record<string, string> = {
-  recebida: 'Recebida',
-  producao: 'Em Producao',
-  pendencia: 'Pendencia',
-  pronta: 'Pronta',
-  enviada: 'Enviada',
-  entregue: 'Entregue',
-  cancelada: 'Cancelada',
-};
+// statusLabels now typed against OSStatus — compiler enforces exhaustiveness.
+export const statusLabels: Record<OSStatus, string> = OS_STATUS_LABELS;
 
 export const roleLabels: Record<string, string> = {
   admin: 'Administrador',
@@ -246,12 +399,5 @@ export const roleLabels: Record<string, string> = {
   financeiro: 'Financeiro',
 };
 
-export function formatCurrency(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-export function formatDate(date: string): string {
-  if (!date) return '-';
-  const d = new Date(date + (date.includes('T') || date.includes(' ') ? '' : 'T00:00:00'));
-  return d.toLocaleDateString('pt-BR');
-}
+// formatCurrency and formatDate are now canonical in src/lib/utils.ts
+// They are re-exported above for backward compatibility.

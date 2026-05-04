@@ -3,12 +3,13 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, FileText, Factory, DollarSign,
   Shield, BarChart3, Settings, ChevronLeft, ChevronRight, LogOut, Menu, Eye,
-  Bell, ChevronDown, Check, Activity
+  Bell, ChevronDown, Check, Activity, PackageCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp, availableProfiles } from '@/contexts/AppContext';
 import { unidades } from '@/data/mockData';
 import { roleLabels } from '@/data/mockData';
+import { estoqueConfig } from '@/data/mockEstoque';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +40,7 @@ const navGroups = [
     items: [
       { label: 'Central / Fabrica', icon: Factory, path: '/central', roles: ['admin', 'gestor', 'operador'] as UserRole[] },
       { label: 'Financeiro', icon: DollarSign, path: '/financeiro', roles: ['admin', 'gestor', 'financeiro'] as UserRole[] },
+      ...(estoqueConfig.habilitado ? [{ label: estoqueConfig.label ?? 'Estoque', icon: PackageCheck, path: '/estoque', roles: ['admin', 'gestor', 'operador'] as UserRole[] }] : []),
     ],
   },
   {

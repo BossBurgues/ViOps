@@ -4,13 +4,19 @@ import AppLayout from '@/components/AppLayout';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { OSDocDisplay, type OSDocumento } from '@/components/OSDocumentos';
-import { ordensServico, formatCurrency, formatDate, unidades, clientes } from '@/data/mockData';
+import { OSOrigemBadge } from '@/components/OSOrigemBadge';
+import { ordensServico, formatCurrency, formatDate, formatDatetime, unidades, clientes } from '@/data/mockData';
 import { useApp } from '@/contexts/AppContext';
 import { getAvailableTransitions, canEditOS, getStatusStep } from '@/data/osWorkflow';
+import { isParcelaVencida } from '@/lib/financialStatus';
+import {
+  PRODUCTION_STATUS_LABELS, PRODUCTION_STATUS_CLASSES, FACTORY_EVENT_TYPE_LABELS,
+  isPendingExternalBaixa,
+} from '@/lib/factoryStatus';
 import {
   ArrowLeft, Clock, User, MapPin, Calendar, CreditCard, FileText, Paperclip,
   CheckCircle, AlertTriangle, Edit, Truck, MoreHorizontal, Lock, ArrowRight,
-  Eye, Shield, History, Upload
+  Eye, Shield, History, Upload, Store, Cpu, ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -77,7 +83,7 @@ export default function OSDetalhePage() {
   const parcelas = os.pagamento?.parcelas || [];
   const pagas = parcelas.filter(p => p.status === 'paga');
   const pendentes = parcelas.filter(p => p.status === 'pendente');
-  const vencidas = pendentes.filter(p => p.vencimento < '2025-04-12');
+  const vencidas = pendentes.filter(p => isParcelaVencida(p));
   const totalPago = pagas.reduce((s, p) => s + p.valor, 0);
   const totalPendente = pendentes.reduce((s, p) => s + p.valor, 0);
 
@@ -132,9 +138,10 @@ export default function OSDetalhePage() {
               <ArrowLeft className="h-4 w-4" />
             </Link>
             <div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-xl font-bold text-foreground">{os.numero}</h1>
                 <StatusBadge status={os.status} />
+                <OSOrigemBadge origem={os.origemVenda ?? 'otica'} localAcao={os.localAcaoExterna} />
                 {vencidas.length > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
                     <AlertTriangle className="h-3 w-3" />Inadimplente
@@ -147,7 +154,7 @@ export default function OSDetalhePage() {
                 )}
               </div>
               <p className="text-[13px] text-muted-foreground mt-0.5">
-                Criada em {formatDate(os.dataCriacao)} por {os.vendedorNome} — {os.unidadeNome}
+                Criada em {formatDate(os.dataCriacao)} por <span className="font-medium text-foreground">{os.vendedorNome}</span> — {os.unidadeNome}
               </p>
             </div>
           </div>
@@ -307,6 +314,7 @@ export default function OSDetalhePage() {
             <div className="page-card p-6">
               <h2 className="section-title mb-5">Dados do Pedido</h2>
               <div className="grid gap-5 sm:grid-cols-2">
+                {/* Cliente */}
                 <div className="flex items-start gap-3">
                   <User className="mt-0.5 h-4 w-4 text-muted-foreground" />
                   <div>
@@ -315,6 +323,29 @@ export default function OSDetalhePage() {
                     {cliente && <p className="text-[12px] text-muted-foreground">{cliente.telefone} — {cliente.email}</p>}
                   </div>
                 </div>
+                {/* Vendedor */}
+                <div className="flex items-start gap-3">
+                  <User className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Vendedor Responsável</p>
+                    <p className="text-sm font-medium text-foreground mt-0.5">{os.vendedorNome}</p>
+                    <p className="text-[12px] text-muted-foreground">{os.unidadeNome}</p>
+                  </div>
+                </div>
+                {/* Origem da Venda */}
+                <div className="flex items-start gap-3">
+                  {os.origemVenda === 'externa'
+                    ? <MapPin className="mt-0.5 h-4 w-4 text-violet-500" />
+                    : <Store className="mt-0.5 h-4 w-4 text-sky-500" />
+                  }
+                  <div>
+                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Origem da Venda</p>
+                    <div className="mt-1">
+                      <OSOrigemBadge origem={os.origemVenda ?? 'otica'} localAcao={os.localAcaoExterna} size="md" />
+                    </div>
+                  </div>
+                </div>
+                {/* Unidade */}
                 <div className="flex items-start gap-3">
                   <MapPin className="mt-0.5 h-4 w-4 text-muted-foreground" />
                   <div>
@@ -323,13 +354,15 @@ export default function OSDetalhePage() {
                     {unidade && <p className="text-[12px] text-muted-foreground">{unidade.cidade}/{unidade.uf} — {unidade.telefone}</p>}
                   </div>
                 </div>
+                {/* Previsão */}
                 <div className="flex items-start gap-3">
                   <Calendar className="mt-0.5 h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Previsao de Entrega</p>
+                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Previsão de Entrega</p>
                     <p className="text-sm font-medium text-foreground mt-0.5">{formatDate(os.dataPrevisao)}</p>
                   </div>
                 </div>
+                {/* Entrega */}
                 <div className="flex items-start gap-3">
                   <Truck className="mt-0.5 h-4 w-4 text-muted-foreground" />
                   <div>
@@ -338,9 +371,26 @@ export default function OSDetalhePage() {
                   </div>
                 </div>
               </div>
+
+              {/* External sale context block */}
+              {os.origemVenda === 'externa' && os.localAcaoExterna && (
+                <div className="mt-5 rounded-lg border border-violet-200 bg-violet-50/50 dark:border-violet-900/40 dark:bg-violet-950/20 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <MapPin className="h-3.5 w-3.5 text-violet-500" />
+                    <p className="text-[11px] uppercase tracking-widest text-violet-600 dark:text-violet-400 font-semibold">Contexto da Ação Externa</p>
+                  </div>
+                  <p className="text-sm font-medium text-foreground">{os.localAcaoExterna}</p>
+                  {os.assinaturaCliente && (
+                    <p className="text-[12px] text-muted-foreground mt-1">
+                      Assinatura coletada em {formatDate(os.assinaturaCliente.capturadoEm)} por {os.assinaturaCliente.usuario}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {os.observacoes && (
                 <div className="mt-5 rounded-lg bg-muted/50 p-4">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Observacoes</p>
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Observações</p>
                   <p className="text-sm text-foreground leading-relaxed">{os.observacoes}</p>
                 </div>
               )}
@@ -419,7 +469,7 @@ export default function OSDetalhePage() {
                     </thead>
                     <tbody>
                       {parcelas.map(p => {
-                        const isOverdue = p.status === 'pendente' && p.vencimento < '2025-04-12';
+                        const isOverdue = isParcelaVencida(p);
                         return (
                           <tr key={p.id} className="border-b border-border/40 last:border-0">
                             <td className="px-6 py-3 text-foreground">{p.numero}/{parcelas.length}</td>
@@ -448,6 +498,125 @@ export default function OSDetalhePage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Factory / Production card — only shown when factoryRef exists */}
+            {os.factoryRef && (
+              <div className="page-card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
+                  <h2 className="section-title">Fábrica / Produção</h2>
+                </div>
+
+                <div className="space-y-3">
+                  {/* Production status */}
+                  {os.factoryRef.producaoStatus && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Status de Produção</p>
+                      <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${PRODUCTION_STATUS_CLASSES[os.factoryRef.producaoStatus]}`}>
+                        {PRODUCTION_STATUS_LABELS[os.factoryRef.producaoStatus]}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Calctool RX 2.0 */}
+                  {os.factoryRef.calctoolRxId && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Calctool RX 2.0</p>
+                      <div className="flex items-center gap-1.5">
+                        <Cpu className="h-3 w-3 text-sky-500" />
+                        <span className="font-mono text-[12px] text-sky-600 dark:text-sky-400">{os.factoryRef.calctoolRxId}</span>
+                      </div>
+                      {os.factoryRef.calctoolRxRegistradoEm && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Registrado em {formatDate(os.factoryRef.calctoolRxRegistradoEm)}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* External ID / Lote */}
+                  {(os.factoryRef.externalId || os.factoryRef.lote) && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Ref. Fábrica</p>
+                      <div className="flex items-center gap-1.5">
+                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                        <span className="font-mono text-[12px] text-foreground">{os.factoryRef.externalId ?? os.factoryRef.lote}</span>
+                      </div>
+                      {os.factoryRef.lote && os.factoryRef.externalId && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Lote: {os.factoryRef.lote}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* External system / baixa */}
+                  {os.factoryRef.sistemaExternoNome && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Sistema Externo</p>
+                      <p className="text-[12px] font-medium text-foreground">{os.factoryRef.sistemaExternoNome}</p>
+                      {os.factoryRef.sistemaExternoId && (
+                        <p className="font-mono text-[11px] text-muted-foreground">{os.factoryRef.sistemaExternoId}</p>
+                      )}
+                      <div className="mt-1">
+                        {os.factoryRef.baixaExternaRealizada ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold text-success">
+                            <CheckCircle className="h-2.5 w-2.5" />Baixa realizada
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
+                            <AlertTriangle className="h-2.5 w-2.5" />Baixa pendente
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dates */}
+                  {os.factoryRef.dataEnvioFabrica && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Envio à Fábrica</p>
+                      <p className="text-[12px] text-foreground">{formatDate(os.factoryRef.dataEnvioFabrica)}</p>
+                    </div>
+                  )}
+                  {os.factoryRef.dataRetornoFabrica && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Retorno da Fábrica</p>
+                      <p className="text-[12px] text-foreground">{formatDate(os.factoryRef.dataRetornoFabrica)}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Factory event history */}
+                {os.factoryRef.historico && os.factoryRef.historico.length > 0 && (
+                  <div className="mt-5 border-t border-border pt-4">
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">Histórico da Fábrica</p>
+                    <div className="space-y-0">
+                      {os.factoryRef.historico.map((ev, i, arr) => (
+                        <div key={ev.id} className="relative pl-5 pb-4 last:pb-0">
+                          <div className={`absolute left-0 top-1 h-2.5 w-2.5 rounded-full ${
+                            ev.tipo === 'calctool' ? 'bg-sky-500' :
+                            ev.tipo === 'baixa_externa' ? 'bg-success' :
+                            ev.tipo === 'status_change' ? 'bg-primary' :
+                            ev.tipo === 'entrada' ? 'bg-primary/60' :
+                            'bg-muted-foreground/40'
+                          }`} />
+                          {i < arr.length - 1 && (
+                            <div className="absolute left-[4px] top-3 h-[calc(100%-4px)] w-px bg-border" />
+                          )}
+                          <p className="text-[11px] font-medium text-foreground leading-relaxed">{ev.descricao}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {FACTORY_EVENT_TYPE_LABELS[ev.tipo]} · {formatDate(ev.timestamp.split('T')[0])}
+                            {ev.usuario && ` · ${ev.usuario}`}
+                          </p>
+                          {ev.producaoStatus && (
+                            <span className={`mt-1 inline-flex items-center rounded px-1 py-0.5 text-[9px] font-semibold ${PRODUCTION_STATUS_CLASSES[ev.producaoStatus]}`}>
+                              {PRODUCTION_STATUS_LABELS[ev.producaoStatus]}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Audit trail */}
             <div className="page-card p-6">
               <div className="flex items-center gap-2 mb-5">
@@ -538,7 +707,7 @@ export default function OSDetalhePage() {
                 <div className="border-t border-border pt-3 flex justify-between">
                   <span className="text-muted-foreground">Dias em andamento</span>
                   <span className="font-medium text-foreground">
-                    {Math.max(0, Math.floor((new Date('2025-04-12').getTime() - new Date(os.dataCriacao).getTime()) / 86400000))}
+                    {Math.max(0, Math.floor((Date.now() - new Date(os.dataCriacao).getTime()) / 86400000))}
                   </span>
                 </div>
               </div>

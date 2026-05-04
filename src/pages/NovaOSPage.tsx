@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { useApp } from '@/contexts/AppContext';
 import { clientes, unidades, formatCurrency } from '@/data/mockData';
+import { OrigemVenda } from '@/data/types';
+import { OSOrigemBadge } from '@/components/OSOrigemBadge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import {
   ArrowLeft, Search, User, MapPin, Package, FileText, CreditCard,
-  Plus, Trash2, CheckCircle, AlertTriangle, ChevronRight, Paperclip
+  Plus, Trash2, CheckCircle, AlertTriangle, ChevronRight, Paperclip, Store,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -42,11 +44,13 @@ export default function NovaOSPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Form state
+  const [origemVenda, setOrigemVenda] = useState<OrigemVenda>('otica');
   const [clienteId, setClienteId] = useState('');
   const [clienteSearch, setClienteSearch] = useState('');
   const [unidadeId, setUnidadeId] = useState(currentUser.unidadeId);
   const [prioridade, setPrioridade] = useState('normal');
   const [observacoes, setObservacoes] = useState('');
+  const [localAcaoExterna, setLocalAcaoExterna] = useState('');
 
   // Items
   const [itens, setItens] = useState<ItemOS[]>([
@@ -126,8 +130,8 @@ export default function NovaOSPage() {
   };
 
   const handleSubmit = () => {
-    toast.success('Ordem de Servico criada com sucesso', {
-      description: `OS criada por ${currentUser.nome} para ${selectedCliente?.nome} com ${documentos.length} documento(s)`,
+    toast.success('Ordem de Serviço criada com sucesso', {
+      description: `OS ${origemVenda === 'externa' ? 'externa' : 'em ótica'} criada por ${currentUser.nome} para ${selectedCliente?.nome} com ${documentos.length} documento(s)`,
     });
     navigate('/ordens');
   };
@@ -177,12 +181,63 @@ export default function NovaOSPage() {
 
         {/* Step content */}
         <div className="page-card p-6">
-          {/* STEP: Cliente */}
           {step === 'cliente' && (
             <div className="space-y-6">
-              <h2 className="text-sm font-semibold text-foreground">Selecione o Cliente e a Unidade</h2>
+              <h2 className="text-sm font-semibold text-foreground">Contexto da Venda</h2>
 
-              <div className="space-y-4">
+              {/* Origem da venda — seleção proeminente */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {([['otica', 'Venda na Ótica', 'Atendimento presencial na loja', Store] as const, ['externa', 'Venda Externa', 'Campo, empresa, visita ou evento', MapPin] as const]).map(([key, label, desc, Icon]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => { setOrigemVenda(key); if (key === 'otica') setLocalAcaoExterna(''); }}
+                    className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-all ${
+                      origemVenda === key
+                        ? key === 'externa'
+                          ? 'border-violet-500 bg-violet-500/5'
+                          : 'border-primary bg-primary/5'
+                        : 'border-border hover:border-border/80 hover:bg-muted/40'
+                    }`}
+                  >
+                    <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                      origemVenda === key
+                        ? key === 'externa' ? 'bg-violet-500/15 text-violet-600' : 'bg-primary/15 text-primary'
+                        : 'bg-muted text-muted-foreground'
+                    }`}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className={`text-sm font-semibold ${
+                        origemVenda === key
+                          ? key === 'externa' ? 'text-violet-600' : 'text-primary'
+                          : 'text-foreground'
+                      }`}>{label}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Campos condicionais — venda externa */}
+              {origemVenda === 'externa' && (
+                <div className="rounded-xl border border-violet-200 bg-violet-50/50 dark:border-violet-900/40 dark:bg-violet-950/20 p-4 space-y-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-violet-600 dark:text-violet-400">Dados da Ação Externa</p>
+                  <div>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Local da Ação</label>
+                    <Input
+                      placeholder="Ex: Empresa Alfa Ltda, Residência do cliente, Evento SESC..."
+                      value={localAcaoExterna}
+                      onChange={(e) => setLocalAcaoExterna(e.target.value)}
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">Onde ocorreu o atendimento externo</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-border pt-4 space-y-4">
+                <h3 className="text-sm font-semibold text-foreground">Cliente e Unidade</h3>
+
                 <div>
                   <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Buscar Cliente</label>
                   <div className="relative">
@@ -444,8 +499,23 @@ export default function NovaOSPage() {
           {/* STEP: Revisao */}
           {step === 'revisao' && (
             <div className="space-y-6">
-              <h2 className="text-sm font-semibold text-foreground">Revisao Final</h2>
-              <p className="text-[12px] text-muted-foreground -mt-4">Confira todos os dados antes de criar a Ordem de Servico.</p>
+              <h2 className="text-sm font-semibold text-foreground">Revisão Final</h2>
+              <p className="text-[12px] text-muted-foreground -mt-4">Confira todos os dados antes de criar a Ordem de Serviço.</p>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-lg border border-border p-4 space-y-2">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Origem da Venda</p>
+                  <OSOrigemBadge origem={origemVenda} localAcao={localAcaoExterna || undefined} size="md" />
+                  {origemVenda === 'externa' && !localAcaoExterna && (
+                    <p className="text-[11px] text-warning">Local da ação não informado</p>
+                  )}
+                </div>
+                <div className="rounded-lg border border-border p-4 space-y-2">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Vendedor</p>
+                  <p className="text-sm font-medium text-foreground">{currentUser.nome}</p>
+                  <p className="text-[12px] text-muted-foreground">{selectedUnidade?.nome || '-'}</p>
+                </div>
+              </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-lg border border-border p-4 space-y-2">
@@ -454,9 +524,14 @@ export default function NovaOSPage() {
                   <p className="text-[12px] text-muted-foreground">{selectedCliente?.cpf}</p>
                 </div>
                 <div className="rounded-lg border border-border p-4 space-y-2">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Unidade</p>
-                  <p className="text-sm font-medium text-foreground">{selectedUnidade?.nome || '-'}</p>
-                  <p className="text-[12px] text-muted-foreground">Prioridade: {prioridade}</p>
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Prioridade</p>
+                  <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                    prioridade === 'urgente' ? 'bg-destructive/10 text-destructive' :
+                    prioridade === 'alta' ? 'bg-warning/10 text-warning' :
+                    'bg-muted text-muted-foreground'
+                  }`}>
+                    {prioridade.charAt(0).toUpperCase() + prioridade.slice(1)}
+                  </span>
                 </div>
               </div>
 
@@ -468,7 +543,7 @@ export default function NovaOSPage() {
                   {itens.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between px-4 py-3">
                       <div>
-                        <p className="text-sm font-medium text-foreground">{item.descricao || 'Sem descricao'}</p>
+                        <p className="text-sm font-medium text-foreground">{item.descricao || 'Sem descrição'}</p>
                         <p className="text-[12px] text-muted-foreground">{item.tipo} — {item.quantidade}x</p>
                       </div>
                       <span className="text-sm font-medium text-foreground">{formatCurrency(item.valorUnitario * item.quantidade)}</span>
@@ -513,7 +588,7 @@ export default function NovaOSPage() {
 
               {observacoes && (
                 <div className="rounded-lg border border-border p-4 space-y-2">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Observacoes</p>
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Observações</p>
                   <p className="text-sm text-foreground">{observacoes}</p>
                 </div>
               )}
@@ -522,7 +597,7 @@ export default function NovaOSPage() {
                 <CheckCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                 <div>
                   <p className="text-[13px] font-medium text-foreground">Pronto para enviar</p>
-                  <p className="text-[12px] text-muted-foreground">A OS sera criada com status "Recebida" e encaminhada automaticamente para a Central de Producao.</p>
+                  <p className="text-[12px] text-muted-foreground">A OS será criada com status "Aberta" e encaminhada para a Central de Produção após confirmação.</p>
                 </div>
               </div>
             </div>

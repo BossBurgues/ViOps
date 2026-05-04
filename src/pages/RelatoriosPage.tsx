@@ -4,7 +4,8 @@ import { KpiCard } from '@/components/KpiCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ordensServico, formatCurrency, formatDate, unidades, clientes } from '@/data/mockData';
 import { useApp } from '@/contexts/AppContext';
-import { BarChart3, TrendingUp, Users, FileText, Shield, Timer, Truck, AlertTriangle, DollarSign, Download, FileSpreadsheet, FileDown, Lock, Info } from 'lucide-react';
+import { isParcelaVencida, isOrigemOtica } from '@/lib/financialStatus';
+import { BarChart3, TrendingUp, Users, FileText, Shield, Timer, Truck, AlertTriangle, DollarSign, Download, FileSpreadsheet, FileDown, Lock, Info, Store, MapPin, Link2 } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
 import { Link } from 'react-router-dom';
 import { TablePagination } from '@/components/TablePagination';
@@ -25,24 +26,33 @@ function buildFinancialRows() {
     const parcelas = os.pagamento?.parcelas || [];
     const pagas = parcelas.filter(p => p.status === 'paga');
     const pendentes = parcelas.filter(p => p.status === 'pendente');
-    const vencidas = pendentes.filter(p => p.vencimento < '2025-04-12');
+    const vencidas = pendentes.filter(p => isParcelaVencida(p));
     const primeiraVencida = [...vencidas].sort((a, b) => a.vencimento.localeCompare(b.vencimento))[0];
     const cliente = clientes.find(c => c.id === os.clienteId);
+    const temBoleto = parcelas.some(p => !!p.boleto);
+    const temLink = parcelas.some(p => !!p.paymentIntent);
+    const boletoStatus = parcelas.find(p => p.boleto)?.boleto?.status || null;
+    const linkStatus = parcelas.find(p => p.paymentIntent)?.paymentIntent?.status || null;
 
     return {
       clienteNome: os.clienteNome,
       cpf: cliente?.cpf || '-',
       osNumero: os.numero,
       unidade: os.unidadeNome.replace('Visual Premium - ', ''),
+      origemVenda: os.origemVenda === 'externa' ? 'Externa' : 'Ótica',
+      formaPagamento: os.pagamento?.formaPagamento || '-',
+      valorTotal: os.valorTotal,
+      valorEntrada: os.pagamento?.valorEntrada ?? 0,
       totalParcelas: parcelas.length,
       parcelasVencidas: vencidas.length,
       parcelasPagas: pagas.length,
-      valorTotal: os.valorTotal,
       valorPago: pagas.reduce((s, p) => s + p.valor, 0),
       valorAberto: pendentes.reduce((s, p) => s + p.valor, 0),
       primeiraVencida: primeiraVencida?.vencimento || null,
       statusFinanceiro: vencidas.length > 0 ? 'Inadimplente' : pendentes.length > 0 ? 'Pendente' : 'Quitado',
       statusOS: os.status,
+      temBoleto: temBoleto ? `Sim (${boletoStatus ?? '?'})` : 'Não',
+      temLink: temLink ? `Sim (${linkStatus ?? '?'})` : 'Não',
     };
   });
 }
@@ -53,14 +63,18 @@ function buildClientRows() {
     const parcelas = osCliente.flatMap(os => os.pagamento?.parcelas || []);
     const pagas = parcelas.filter(p => p.status === 'paga');
     const pendentes = parcelas.filter(p => p.status === 'pendente');
-    const vencidas = pendentes.filter(p => p.vencimento < '2025-04-12');
+    const vencidas = pendentes.filter(p => isParcelaVencida(p));
     const primeiraVencida = [...vencidas].sort((a, b) => a.vencimento.localeCompare(b.vencimento))[0];
+    const osOtica = osCliente.filter(os => isOrigemOtica(os.origemVenda)).length;
+    const osExterna = osCliente.filter(os => !isOrigemOtica(os.origemVenda)).length;
 
     return {
       nome: c.nome,
       cpf: c.cpf,
       telefone: c.telefone,
       totalOS: osCliente.length,
+      osOtica,
+      osExterna,
       totalParcelas: parcelas.length,
       parcelasPagas: pagas.length,
       parcelasVencidas: vencidas.length,
@@ -203,8 +217,18 @@ export default function RelatoriosPage() {
     : '-';
 
   const allParcelas = relevantOS.flatMap(os => os.pagamento?.parcelas || []);
-  const vencidas = allParcelas.filter(p => p.status === 'pendente' && p.vencimento < '2025-04-12');
+  const vencidas = allParcelas.filter(p => isParcelaVencida(p));
   const inadRate = allParcelas.length > 0 ? ((vencidas.length / allParcelas.length) * 100).toFixed(1) : '0';
+
+  // Origin breakdown for Geral tab
+  const osOtica = relevantOS.filter(os => isOrigemOtica(os.origemVenda)).length;
+  const osExterna = relevantOS.filter(os => !isOrigemOtica(os.origemVenda)).length;
+  const boletosAtivos = relevantOS.flatMap(os =>
+    (os.pagamento?.parcelas || []).filter(p => p.boleto && ['emitido','enviado','pendente'].includes(p.boleto.status))
+  ).length;
+  const linksPendentes = relevantOS.flatMap(os =>
+    (os.pagamento?.parcelas || []).filter(p => p.paymentIntent && ['gerado','enviado','pendente'].includes(p.paymentIntent.status))
+  ).length;
 
   const porUnidade = unidades.filter(u => u.ativa).map(u => ({
     ...u,
@@ -398,11 +422,17 @@ export default function RelatoriosPage() {
           <div className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
               <KpiCard title="Total de OS" value={totalOS} icon={FileText} />
-              <KpiCard title="Ticket Medio" value={ticketMedio} icon={TrendingUp} isCurrency />
+              <KpiCard title="Ticket Médio" value={ticketMedio} icon={TrendingUp} isCurrency />
               <KpiCard title="Faturamento" value={faturamentoTotal} icon={DollarSign} isCurrency />
-              <KpiCard title="Tempo Medio" value={`${avgProduction}d`} icon={Timer} />
+              <KpiCard title="Tempo Médio" value={`${avgProduction}d`} icon={Timer} />
               <KpiCard title="Entregues" value={entregues.length} icon={Truck} />
-              <KpiCard title="Inadimplencia" value={`${inadRate}%`} icon={AlertTriangle} />
+              <KpiCard title="Inadimplência" value={`${inadRate}%`} icon={AlertTriangle} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <KpiCard title="Venda Ótica" value={osOtica} icon={Store} />
+              <KpiCard title="Venda Externa" value={osExterna} icon={MapPin} />
+              <KpiCard title="Boletos Ativos" value={boletosAtivos} icon={DollarSign} />
+              <KpiCard title="Links Pendentes" value={linksPendentes} icon={Link2} />
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2">
@@ -487,15 +517,17 @@ export default function RelatoriosPage() {
                   <thead>
                     <tr className="border-b border-border">
                       <th className="table-header px-4 py-3 text-left">Cliente</th>
-                      <th className="table-header px-4 py-3 text-left">CPF</th>
                       <th className="table-header px-4 py-3 text-left">OS</th>
                       <th className="table-header px-4 py-3 text-left">Unidade</th>
-                      <th className="table-header px-4 py-3 text-center">Parcelas</th>
+                      <th className="table-header px-4 py-3 text-left">Origem</th>
+                      <th className="table-header px-4 py-3 text-left">Forma Pgto</th>
                       <th className="table-header px-4 py-3 text-center">Pagas</th>
                       <th className="table-header px-4 py-3 text-center">Vencidas</th>
-                      <th className="table-header px-4 py-3 text-right">Valor Total</th>
+                      <th className="table-header px-4 py-3 text-right">Total</th>
                       <th className="table-header px-4 py-3 text-right">Pago</th>
                       <th className="table-header px-4 py-3 text-right">Aberto</th>
+                      <th className="table-header px-4 py-3 text-left">Boleto</th>
+                      <th className="table-header px-4 py-3 text-left">Link</th>
                       <th className="table-header px-4 py-3 text-left">1a Vencida</th>
                       <th className="table-header px-4 py-3 text-left">Status</th>
                     </tr>
@@ -504,15 +536,23 @@ export default function RelatoriosPage() {
                     {finPaginated.map((r, i) => (
                       <tr key={i} className={`border-b border-border/40 last:border-0 transition-colors hover:bg-muted/40 ${r.statusFinanceiro === 'Inadimplente' ? 'bg-destructive/[0.02]' : ''}`}>
                         <td className="px-4 py-3 font-medium text-foreground text-[13px]">{r.clienteNome}</td>
-                        <td className="px-4 py-3 text-muted-foreground font-mono text-[11px]">{r.cpf}</td>
                         <td className="px-4 py-3 font-medium text-primary text-[13px]">{r.osNumero}</td>
                         <td className="px-4 py-3 text-muted-foreground text-[12px]">{r.unidade}</td>
-                        <td className="px-4 py-3 text-center text-foreground">{r.totalParcelas}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded-md px-1.5 py-0.5 ${
+                            r.origemVenda === 'Externa' ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400' : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {r.origemVenda}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-[11px] max-w-[100px] truncate">{r.formaPagamento}</td>
                         <td className="px-4 py-3 text-center text-success font-medium">{r.parcelasPagas}</td>
                         <td className="px-4 py-3 text-center text-destructive font-medium">{r.parcelasVencidas || '-'}</td>
                         <td className="px-4 py-3 text-right font-medium text-foreground">{formatCurrency(r.valorTotal)}</td>
                         <td className="px-4 py-3 text-right text-success">{formatCurrency(r.valorPago)}</td>
                         <td className="px-4 py-3 text-right text-foreground">{formatCurrency(r.valorAberto)}</td>
+                        <td className="px-4 py-3 text-[11px] text-muted-foreground">{r.temBoleto}</td>
+                        <td className="px-4 py-3 text-[11px] text-muted-foreground">{r.temLink}</td>
                         <td className="px-4 py-3 text-muted-foreground text-[12px]">{r.primeiraVencida ? formatDate(r.primeiraVencida) : '-'}</td>
                         <td className="px-4 py-3">
                           <span className={`status-badge ${r.statusFinanceiro === 'Quitado' ? 'status-pronta' : r.statusFinanceiro === 'Inadimplente' ? 'status-cancelada' : 'status-pendencia'}`}>

@@ -4,7 +4,8 @@ import { KpiCard } from '@/components/KpiCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ordensServico, formatCurrency, formatDate, unidades, clientes } from '@/data/mockData';
 import { useApp } from '@/contexts/AppContext';
-import { FileText, Factory, CheckCircle, Truck, AlertTriangle, DollarSign, TrendingUp, Clock, GripVertical, Settings2, RotateCcw, BarChart3, Save } from 'lucide-react';
+import { isParcelaVencida, isOrigemOtica } from '@/lib/financialStatus';
+import { FileText, Factory, CheckCircle, Truck, AlertTriangle, DollarSign, TrendingUp, Clock, GripVertical, Settings2, RotateCcw, Save, Link2, Store, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
@@ -65,10 +66,27 @@ export default function DashboardPage() {
   const osRecentes = [...relevantOS].sort((a, b) => b.dataCriacao.localeCompare(a.dataCriacao)).slice(0, 6);
 
   const allParcelas = relevantOS.flatMap(os => (os.pagamento?.parcelas || []).map(p => ({ ...p, osId: os.id })));
-  const parcelasVencidas = allParcelas.filter(p => p.status === 'pendente' && p.vencimento < '2025-04-12');
+  const parcelasVencidas = allParcelas.filter(p => isParcelaVencida(p));
   const totalVencido = parcelasVencidas.reduce((s, p) => s + p.valor, 0);
   const totalRecebido = allParcelas.filter(p => p.status === 'paga').reduce((s, p) => s + p.valor, 0);
   const totalPendente = allParcelas.filter(p => p.status === 'pendente').reduce((s, p) => s + p.valor, 0);
+
+  // Origin of sale
+  const osOtica = relevantOS.filter(os => isOrigemOtica(os.origemVenda)).length;
+  const osExterna = relevantOS.filter(os => !isOrigemOtica(os.origemVenda)).length;
+
+  // Hybrid payment signals
+  const boletosVencidos = relevantOS.flatMap(os =>
+    (os.pagamento?.parcelas || []).filter(p => p.boleto && isParcelaVencida(p))
+  ).length;
+  const boletosEmAberto = relevantOS.flatMap(os =>
+    (os.pagamento?.parcelas || []).filter(p => p.boleto && ['emitido','enviado','pendente'].includes(p.boleto.status))
+  ).length;
+  const linksPendentes = relevantOS.flatMap(os =>
+    (os.pagamento?.parcelas || []).filter(p => p.paymentIntent && ['gerado','enviado','pendente'].includes(p.paymentIntent.status))
+  ).length;
+  const totalEntradas = relevantOS.reduce((s, os) => s + (os.pagamento?.valorEntrada ?? 0), 0);
+  const osHibridas = relevantOS.filter(os => os.pagamento?.valorEntrada && os.pagamento.metodoPagamentoComplementar).length;
 
   const statusData = (['recebida', 'producao', 'pendencia', 'pronta', 'enviada', 'entregue'] as const).map((status, i) => ({
     name: status.charAt(0).toUpperCase() + status.slice(1),
@@ -114,13 +132,23 @@ export default function DashboardPage() {
     switch (widget.id) {
       case 'kpis':
         return (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <KpiCard title="OS Abertas" value={osAbertas} icon={FileText} />
-            <KpiCard title="Em Producao" value={osProducao} icon={Factory} />
-            <KpiCard title="Prontas / Enviadas" value={osProntas} icon={CheckCircle} />
-            <KpiCard title="Entregues" value={osEntregues} icon={Truck} />
-            <KpiCard title="Pendencias" value={osPendencias} icon={AlertTriangle} />
-            <KpiCard title="Faturamento" value={totalFaturamento} icon={DollarSign} isCurrency />
+          <div className="space-y-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <KpiCard title="OS Abertas" value={osAbertas} icon={FileText} />
+              <KpiCard title="Em Produção" value={osProducao} icon={Factory} />
+              <KpiCard title="Prontas/Enviadas" value={osProntas} icon={CheckCircle} />
+              <KpiCard title="Entregues" value={osEntregues} icon={Truck} />
+              <KpiCard title="Pendências" value={osPendencias} icon={AlertTriangle} />
+              <KpiCard title="Faturamento" value={totalFaturamento} icon={DollarSign} isCurrency />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <KpiCard title="Venda Ótica" value={osOtica} icon={Store} />
+              <KpiCard title="Venda Externa" value={osExterna} icon={MapPin} />
+              <KpiCard title="Cobranças Híbridas" value={osHibridas} icon={Link2} />
+              <KpiCard title="Boletos em Aberto" value={boletosEmAberto} icon={DollarSign} />
+              <KpiCard title="Links Pendentes" value={linksPendentes} icon={Link2} />
+              <KpiCard title="Inadimplente" value={parcelasVencidas.length} icon={AlertTriangle} />
+            </div>
           </div>
         );
 
@@ -152,7 +180,7 @@ export default function DashboardPage() {
         return (
           <div className="page-card">
             <div className="flex items-center justify-between border-b border-border px-6 py-4">
-              <h2 className="text-sm font-semibold text-foreground">Ordens de Servico Recentes</h2>
+              <h2 className="text-sm font-semibold text-foreground">Ordens de Serviço Recentes</h2>
               <Link to="/ordens" className="text-[12px] font-semibold text-primary hover:underline">Ver todas</Link>
             </div>
             {osRecentes.length === 0 ? (
@@ -165,23 +193,32 @@ export default function DashboardPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="table-header px-6 py-3 text-left">Numero</th>
-                      <th className="table-header px-6 py-3 text-left">Cliente</th>
-                      <th className="table-header px-6 py-3 text-left">Unidade</th>
-                      <th className="table-header px-6 py-3 text-left">Status</th>
-                      <th className="table-header px-6 py-3 text-right">Valor</th>
+                      <th className="table-header px-5 py-3 text-left">Número</th>
+                      <th className="table-header px-5 py-3 text-left">Cliente</th>
+                      <th className="table-header px-5 py-3 text-left">Origem</th>
+                      <th className="table-header px-5 py-3 text-left">Status</th>
+                      <th className="table-header px-5 py-3 text-right">Valor</th>
                     </tr>
                   </thead>
                   <tbody>
                     {osRecentes.map((os) => (
                       <tr key={os.id} className="border-b border-border/40 last:border-0 transition-colors hover:bg-muted/40">
-                        <td className="px-6 py-3 font-medium text-primary">
+                        <td className="px-5 py-3 font-medium text-primary">
                           <Link to={`/ordens/${os.id}`} className="hover:underline">{os.numero}</Link>
                         </td>
-                        <td className="px-6 py-3 text-foreground">{os.clienteNome}</td>
-                        <td className="px-6 py-3 text-muted-foreground">{os.unidadeNome.replace('Visual Premium - ', '')}</td>
-                        <td className="px-6 py-3"><StatusBadge status={os.status} /></td>
-                        <td className="px-6 py-3 text-right font-medium text-foreground">{formatCurrency(os.valorTotal)}</td>
+                        <td className="px-5 py-3 text-foreground">{os.clienteNome}</td>
+                        <td className="px-5 py-3">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded-md px-1.5 py-0.5 ${
+                            os.origemVenda === 'externa'
+                              ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                              : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {os.origemVenda === 'externa' ? <MapPin className="h-2.5 w-2.5" /> : <Store className="h-2.5 w-2.5" />}
+                            {os.origemVenda === 'externa' ? 'Externa' : 'Ótica'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3"><StatusBadge status={os.status} /></td>
+                        <td className="px-5 py-3 text-right font-medium text-foreground">{formatCurrency(os.valorTotal)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -195,22 +232,22 @@ export default function DashboardPage() {
         return (
           <div className="page-card">
             <div className="border-b border-border px-6 py-4">
-              <h2 className="text-sm font-semibold text-foreground">Alertas e Pendencias</h2>
+              <h2 className="text-sm font-semibold text-foreground">Alertas e Pendências</h2>
             </div>
             <div className="divide-y divide-border/40 px-6">
               {osPendencias > 0 && (
-                <div className="flex items-start gap-3 py-4">
+                <div className="flex items-start gap-3 py-3.5">
                   <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-warning/10">
                     <AlertTriangle className="h-3.5 w-3.5 text-warning" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{osPendencias} OS com pendencia</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Verificar receitas e documentacao</p>
+                    <p className="text-sm font-medium text-foreground">{osPendencias} OS com pendência</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Verificar receitas e documentação</p>
                   </div>
                 </div>
               )}
               {parcelasVencidas.length > 0 && (
-                <div className="flex items-start gap-3 py-4">
+                <div className="flex items-start gap-3 py-3.5">
                   <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
                     <DollarSign className="h-3.5 w-3.5 text-destructive" />
                   </div>
@@ -220,18 +257,40 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+              {boletosVencidos > 0 && (
+                <div className="flex items-start gap-3 py-3.5">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+                    <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{boletosVencidos} boleto(s) vencido(s)</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Boletos emitidos não pagos no prazo</p>
+                  </div>
+                </div>
+              )}
+              {linksPendentes > 0 && (
+                <div className="flex items-start gap-3 py-3.5">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/10">
+                    <Link2 className="h-3.5 w-3.5 text-sky-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{linksPendentes} link(s) não pago(s)</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Cobrança gerada/enviada — aguardando pagamento</p>
+                  </div>
+                </div>
+              )}
               {osProntas > 0 && (
-                <div className="flex items-start gap-3 py-4">
+                <div className="flex items-start gap-3 py-3.5">
                   <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-info/10">
                     <Truck className="h-3.5 w-3.5 text-info" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">{osProntas} OS aguardando retirada</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Prontas ou em transito</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Prontas ou em trânsito</p>
                   </div>
                 </div>
               )}
-              {osPendencias === 0 && parcelasVencidas.length === 0 && osProntas === 0 && (
+              {osPendencias === 0 && parcelasVencidas.length === 0 && boletosVencidos === 0 && linksPendentes === 0 && osProntas === 0 && (
                 <div className="flex items-center gap-3 py-6">
                   <CheckCircle className="h-4 w-4 text-success" />
                   <p className="text-[13px] text-muted-foreground">Nenhum alerta no momento</p>
@@ -273,23 +332,21 @@ export default function DashboardPage() {
               <h3 className="section-title">Resumo Financeiro</h3>
               <Link to="/financeiro" className="text-[11px] font-semibold text-primary hover:underline">Ver detalhes</Link>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between py-2 border-b border-border/40">
-                <span className="text-[13px] text-muted-foreground">Total Recebido</span>
-                <span className="text-[13px] font-semibold text-success">{formatCurrency(totalRecebido)}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-border/40">
-                <span className="text-[13px] text-muted-foreground">Total Pendente</span>
-                <span className="text-[13px] font-semibold text-foreground">{formatCurrency(totalPendente)}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-border/40">
-                <span className="text-[13px] text-muted-foreground">Total Vencido</span>
-                <span className="text-[13px] font-semibold text-destructive">{formatCurrency(totalVencido)}</span>
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <span className="text-[13px] text-muted-foreground">Parcelas Vencidas</span>
-                <span className="text-[13px] font-bold text-destructive">{parcelasVencidas.length}</span>
-              </div>
+            <div className="space-y-0">
+              {[
+                { label: 'Total Recebido', value: formatCurrency(totalRecebido), cls: 'text-success' },
+                { label: 'Total Pendente', value: formatCurrency(totalPendente), cls: 'text-foreground' },
+                { label: 'Total Vencido', value: formatCurrency(totalVencido), cls: 'text-destructive' },
+                { label: 'Entradas Recebidas', value: formatCurrency(totalEntradas), cls: 'text-foreground' },
+                { label: 'Parcelas Vencidas', value: String(parcelasVencidas.length), cls: parcelasVencidas.length > 0 ? 'text-destructive font-bold' : 'text-foreground' },
+                { label: 'Boletos em Aberto', value: String(boletosEmAberto), cls: boletosEmAberto > 0 ? 'text-warning font-bold' : 'text-foreground' },
+                { label: 'Links Não Pagos', value: String(linksPendentes), cls: linksPendentes > 0 ? 'text-sky-600 dark:text-sky-400 font-bold' : 'text-foreground' },
+              ].map(({ label, value, cls }) => (
+                <div key={label} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
+                  <span className="text-[12px] text-muted-foreground">{label}</span>
+                  <span className={`text-[12px] font-semibold ${cls}`}>{value}</span>
+                </div>
+              ))}
             </div>
           </div>
         );
