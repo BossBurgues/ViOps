@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { useApp } from '@/contexts/AppContext';
 import { clientes, unidades, formatCurrency } from '@/data/mockData';
-import { OrigemVenda } from '@/data/types';
+import { OrigemVenda, CanalOperacional } from '@/data/types';
 import { OSOrigemBadge } from '@/components/OSOrigemBadge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,13 @@ export default function NovaOSPage() {
   const [prioridade, setPrioridade] = useState('normal');
   const [observacoes, setObservacoes] = useState('');
   const [localAcaoExterna, setLocalAcaoExterna] = useState('');
+  const [vendedorExternoNome, setVendedorExternoNome] = useState('');
+
+  // Derived: the operational channel and responsible unit
+  // External sales are ALWAYS assigned to the Central/Fábrica (u0)
+  const CENTRAL_ID = 'u0';
+  const canalOperacional: CanalOperacional = origemVenda === 'externa' ? 'externa' : 'loja';
+  const unidadeCentral = unidades.find(u => u.id === CENTRAL_ID);
 
   // Items
   const [itens, setItens] = useState<ItemOS[]>([
@@ -106,7 +113,12 @@ export default function NovaOSPage() {
   const stepIndex = STEPS.findIndex(s => s.key === step);
 
   const canAdvance = () => {
-    if (step === 'cliente') return !!clienteId && !!unidadeId;
+    if (step === 'cliente') {
+      if (!clienteId) return false;
+      if (origemVenda === 'otica') return !!unidadeId;
+      // For externa: localAcaoExterna is required
+      return !!localAcaoExterna.trim();
+    }
     if (step === 'itens') return itens.length > 0 && itens.every(i => i.descricao && i.valorUnitario > 0);
     if (step === 'pagamento') return !!formaPagamento;
     return true;
@@ -187,11 +199,22 @@ export default function NovaOSPage() {
 
               {/* Origem da venda — seleção proeminente */}
               <div className="grid gap-3 sm:grid-cols-2">
-                {([['otica', 'Venda na Ótica', 'Atendimento presencial na loja', Store] as const, ['externa', 'Venda Externa', 'Campo, empresa, visita ou evento', MapPin] as const]).map(([key, label, desc, Icon]) => (
+                {([['otica', 'Venda na Ótica', 'Atendimento presencial na loja', Store] as const, ['externa', 'Venda Externa (Central)', 'Venda de campo pela equipe externa da Central', MapPin] as const]).map(([key, label, desc, Icon]) => (
                   <button
                     key={key}
                     type="button"
-                    onClick={() => { setOrigemVenda(key); if (key === 'otica') setLocalAcaoExterna(''); }}
+                    onClick={() => {
+                      setOrigemVenda(key);
+                      if (key === 'externa') {
+                        // Auto-assign to Central/Fábrica — external sales never belong to an ótica
+                        setUnidadeId(CENTRAL_ID);
+                        setLocalAcaoExterna('');
+                      } else {
+                        // Revert to the user's home unit when switching back to ótica
+                        setUnidadeId(currentUser.unidadeId);
+                        setLocalAcaoExterna('');
+                      }
+                    }}
                     className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-all ${
                       origemVenda === key
                         ? key === 'externa'
@@ -222,15 +245,35 @@ export default function NovaOSPage() {
               {/* Campos condicionais — venda externa */}
               {origemVenda === 'externa' && (
                 <div className="rounded-xl border border-violet-200 bg-violet-50/50 dark:border-violet-900/40 dark:bg-violet-950/20 p-4 space-y-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-violet-600 dark:text-violet-400">Dados da Ação Externa</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-violet-600 dark:text-violet-400">Dados da Ação Externa — Central/Fábrica</p>
+
+                  {/* Unit info-box — not selectable; external always = Central */}
+                  <div className="rounded-lg border border-violet-300/60 bg-violet-100/40 dark:bg-violet-950/30 px-3 py-2.5 flex items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                    <div>
+                      <p className="text-[11px] font-semibold text-violet-700 dark:text-violet-300">Unidade responsável: Central / Fábrica</p>
+                      <p className="text-[10px] text-violet-600/70 dark:text-violet-400/60">A venda externa pertence exclusivamente à Central — não a nenhuma ótica</p>
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Local da Ação</label>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Local da Ação <span className="text-destructive">*</span></label>
                     <Input
                       placeholder="Ex: Empresa Alfa Ltda, Residência do cliente, Evento SESC..."
                       value={localAcaoExterna}
                       onChange={(e) => setLocalAcaoExterna(e.target.value)}
                     />
-                    <p className="text-[11px] text-muted-foreground mt-1">Onde ocorreu o atendimento externo</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Onde ocorreu o atendimento externo (obrigatório)</p>
+                  </div>
+
+                  <div>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Vendedor / Equipe Externa</label>
+                    <Input
+                      placeholder="Nome do vendedor ou equipe responsável pelo campo..."
+                      value={vendedorExternoNome}
+                      onChange={(e) => setVendedorExternoNome(e.target.value)}
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">Quem realizou ou acompanhou a venda externa</p>
                   </div>
                 </div>
               )}
@@ -277,30 +320,19 @@ export default function NovaOSPage() {
                   )}
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                {origemVenda === 'otica' && (
                   <div>
-                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Unidade de Origem</label>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Unidade de Atendimento</label>
                     <Select value={unidadeId} onValueChange={setUnidadeId}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {unidades.filter(u => u.ativa).map(u => (
+                        {unidades.filter(u => u.ativa && u.tipo !== 'central_fabrica').map(u => (
                           <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Prioridade</label>
-                    <Select value={prioridade} onValueChange={setPrioridade}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="normal">Normal</SelectItem>
-                        <SelectItem value="alta">Alta</SelectItem>
-                        <SelectItem value="urgente">Urgente</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -502,18 +534,40 @@ export default function NovaOSPage() {
               <h2 className="text-sm font-semibold text-foreground">Revisão Final</h2>
               <p className="text-[12px] text-muted-foreground -mt-4">Confira todos os dados antes de criar a Ordem de Serviço.</p>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-lg border border-border p-4 space-y-2">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Origem da Venda</p>
-                  <OSOrigemBadge origem={origemVenda} localAcao={localAcaoExterna || undefined} size="md" />
-                  {origemVenda === 'externa' && !localAcaoExterna && (
-                    <p className="text-[11px] text-warning">Local da ação não informado</p>
-                  )}
-                </div>
-                <div className="rounded-lg border border-border p-4 space-y-2">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Vendedor</p>
-                  <p className="text-sm font-medium text-foreground">{currentUser.nome}</p>
-                  <p className="text-[12px] text-muted-foreground">{selectedUnidade?.nome || '-'}</p>
+              <div className="rounded-lg border border-border divide-y divide-border/60">
+                <div className="px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">Contexto da Venda</p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[12px]">
+                    <div>
+                      <span className="text-muted-foreground">Tipo: </span>
+                      <span className="font-medium text-foreground">{origemVenda === 'externa' ? 'Venda Externa' : 'Venda na Ótica'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Canal: </span>
+                      <span className="font-medium text-foreground capitalize">{canalOperacional}</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Unidade responsável: </span>
+                      <span className={`font-medium ${origemVenda === 'externa' ? 'text-violet-600 dark:text-violet-400' : 'text-foreground'}`}>
+                        {origemVenda === 'externa'
+                          ? (unidadeCentral?.nome ?? 'Central / Fábrica')
+                          : unidades.find(u => u.id === unidadeId)?.nome ?? '-'
+                        }
+                      </span>
+                    </div>
+                    {localAcaoExterna && (
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Local da ação: </span>
+                        <span className="font-medium text-foreground">{localAcaoExterna}</span>
+                      </div>
+                    )}
+                    {vendedorExternoNome && (
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Equipe externa: </span>
+                        <span className="font-medium text-foreground">{vendedorExternoNome}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -633,7 +687,7 @@ export default function NovaOSPage() {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Confirmar Criação da OS"
-        description={`Criar OS para ${selectedCliente?.nome || 'cliente'} no valor de ${formatCurrency(totalItens)} com ${documentos.length} documento(s)? A OS será criada com status Aberta e poderá ser enviada à Central em seguida.`}
+        description={`Criar OS de ${origemVenda === 'externa' ? 'venda externa (Central/Fábrica)' : 'venda na ótica'} para ${selectedCliente?.nome || 'cliente'} no valor de ${formatCurrency(totalItens)} com ${documentos.length} documento(s)? A OS será criada com status Aberta.`}
         confirmLabel="Criar OS"
         onConfirm={handleSubmit}
       />

@@ -4,7 +4,7 @@ import { KpiCard } from '@/components/KpiCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ordensServico, formatCurrency, formatDate, unidades, clientes } from '@/data/mockData';
 import { useApp } from '@/contexts/AppContext';
-import { isParcelaVencida, isOrigemOtica } from '@/lib/financialStatus';
+import { isParcelaVencida, isOrigemOtica, isCanalLoja, isCanalExterno } from '@/lib/financialStatus';
 import { getOSStatusColor } from '@/lib/osStatus';
 import { FileText, Factory, CheckCircle, Truck, AlertTriangle, DollarSign, TrendingUp, Clock, GripVertical, Settings2, RotateCcw, Save, Link2, Store, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -76,8 +76,9 @@ export default function DashboardPage() {
   const totalPendente = allParcelas.filter(p => p.status === 'pendente').reduce((s, p) => s + p.valor, 0);
 
   // Origin of sale
-  const osOtica = relevantOS.filter(os => isOrigemOtica(os.origemVenda)).length;
-  const osExterna = relevantOS.filter(os => !isOrigemOtica(os.origemVenda)).length;
+  // Canal de venda — usa canalOperacional (explícito) com fallback para origemVenda (legacy)
+  const osOtica    = relevantOS.filter(os => isCanalLoja(os.canalOperacional, os.origemVenda)).length;
+  const osExterna  = relevantOS.filter(os => isCanalExterno(os.canalOperacional, os.origemVenda)).length;
 
   // Hybrid payment signals
   const boletosVencidos = relevantOS.flatMap(os =>

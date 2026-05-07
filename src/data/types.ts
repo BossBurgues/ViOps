@@ -35,6 +35,13 @@ export interface Rede {
   cnpj: string;
 }
 
+// ---------------------------------------------------------------------------
+// Unit type — distinguishes optical stores from the production/factory hub.
+// Optional field (defaults to 'otica') for backward compat with existing data.
+// ---------------------------------------------------------------------------
+
+export type TipoUnidade = 'otica' | 'central_fabrica';
+
 export interface Unidade {
   id: string;
   redeId: string;
@@ -43,7 +50,26 @@ export interface Unidade {
   uf: string;
   telefone: string;
   ativa: boolean;
+  /**
+   * Defaults to 'otica' when absent.
+   * 'central_fabrica' marks the production/factory hub unit.
+   * There should be at most one 'central_fabrica' per rede.
+   */
+  tipo?: TipoUnidade;
 }
+
+// ---------------------------------------------------------------------------
+// Operational channel — the channel through which a sale was executed.
+// Derived from origemVenda + unidade.tipo but stored explicitly on the OS
+// so that downstream reports, filters and dashboards don't need to re-derive.
+// ---------------------------------------------------------------------------
+
+/**
+ * 'loja'    — Sale executed at the optical store (presential atendimento).
+ * 'externa' — Field/external sale executed by the Central/Fábrica team.
+ * 'central' — Internal production/admin order originating at the central hub.
+ */
+export type CanalOperacional = 'loja' | 'externa' | 'central';
 
 // ---------------------------------------------------------------------------
 // Customer
@@ -366,6 +392,12 @@ export interface OrdemServico {
    * Defaults to 'otica' for existing records without this field.
    */
   origemVenda: OrigemVenda;
+  /**
+   * Operational channel — derived at creation time from origemVenda + unit type.
+   * Stored explicitly to avoid re-derivation in dashboards/reports/filters.
+   * Optional for backward compat with existing records.
+   */
+  canalOperacional?: CanalOperacional;
   /** Present when origemVenda === 'externa' and customer signature was captured */
   assinaturaCliente?: AssinaturaCliente;
   /**
@@ -383,6 +415,11 @@ export interface OrdemServico {
   // Seller
   vendedorId: string;
   vendedorNome: string;
+  /**
+   * For external sales: the field seller or external team name.
+   * Distinct from vendedorNome when the responsible is an external agent.
+   */
+  vendedorExternoNome?: string;
 
   // Value
   valorTotal: number;
@@ -437,6 +474,17 @@ export const OS_STATUS_LABELS: Record<OSStatus, string> = {
 export const ORIGEM_VENDA_LABELS: Record<OrigemVenda, string> = {
   otica: 'Venda na Ótica',
   externa: 'Venda Externa',
+};
+
+export const TIPO_UNIDADE_LABELS: Record<TipoUnidade, string> = {
+  otica: 'Ótica',
+  central_fabrica: 'Central / Fábrica',
+};
+
+export const CANAL_OPERACIONAL_LABELS: Record<CanalOperacional, string> = {
+  loja:    'Loja',
+  externa: 'Externa (Central)',
+  central: 'Central',
 };
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
