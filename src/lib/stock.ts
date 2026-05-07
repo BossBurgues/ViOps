@@ -4,11 +4,11 @@
 // This module is OPTIONAL. It must never be imported unconditionally by core
 // pages or components. Only activate when the inventory feature flag is on.
 //
-// Types are defined in src/data/types.ts (ItemEstoque, MovimentacaoEstoque).
+// Types are authoritative in src/data/stockTypes.ts.
 // This file contains helpers, constants, and derived logic for the stock module.
 // =============================================================================
 
-import { ItemEstoque, MovimentacaoEstoque, MovimentacaoEstoqueTipo } from '@/data/types';
+import { ItemEstoque, MovimentacaoEstoque, TipoMovimentacao } from '@/data/stockTypes';
 
 // ---------------------------------------------------------------------------
 // Stock status derivation
@@ -20,32 +20,35 @@ export type StockAlertLevel = 'ok' | 'low' | 'out';
  * Returns the alert level for an item based on available vs minimum quantity.
  */
 export function getStockAlertLevel(item: ItemEstoque): StockAlertLevel {
-  if (item.quantidadeDisponivel <= 0) return 'out';
-  if (item.quantidadeDisponivel <= item.quantidadeMinima) return 'low';
+  if (item.saldoAtual <= 0) return 'out';
+  if (item.saldoAtual <= item.estoqueMinimo) return 'low';
   return 'ok';
 }
 
 /**
- * Returns the net quantity (available minus reserved).
+ * Returns how many units are below the minimum threshold.
+ * Useful for aggregate alerts in EstoquePage.
  */
-export function getNetQuantity(item: ItemEstoque): number {
-  return item.quantidadeDisponivel - item.quantidadeReservada;
+export function getDeficitQuantidade(item: ItemEstoque): number {
+  return Math.max(0, item.estoqueMinimo - item.saldoAtual);
 }
 
 // ---------------------------------------------------------------------------
 // Stock movement labels — for display in audit trails and reports
 // ---------------------------------------------------------------------------
 
-export const MOVIMENTACAO_LABELS: Record<MovimentacaoEstoqueTipo, string> = {
-  entrada: 'Entrada',
-  saida: 'Saída',
-  ajuste: 'Ajuste de Inventário',
-  reserva: 'Reserva para OS',
-  cancelamento_reserva: 'Cancelamento de Reserva',
+export const MOVIMENTACAO_LABELS: Record<TipoMovimentacao, string> = {
+  entrada:          'Entrada',
+  saida:            'Saída',
+  baixa_os:         'Baixa por OS',
+  ajuste_positivo:  'Ajuste positivo',
+  ajuste_negativo:  'Ajuste negativo',
+  devolucao:        'Devolução',
+  transferencia:    'Transferência',
 };
 
 export const STOCK_ALERT_LABELS: Record<StockAlertLevel, string> = {
-  ok: 'Estoque normal',
+  ok:  'Estoque normal',
   low: 'Estoque baixo',
   out: 'Sem estoque',
 };
@@ -56,16 +59,20 @@ export const STOCK_ALERT_LABELS: Record<StockAlertLevel, string> = {
 
 /** Returns an empty stock movement stub for forms. */
 export function createEmptyMovimentacao(
-  itemEstoqueId: string,
-  tipo: MovimentacaoEstoqueTipo,
-  userId: string,
-): Omit<MovimentacaoEstoque, 'id' | 'saldoApos'> {
+  itemId: string,
+  tipo: TipoMovimentacao,
+  usuarioId: string,
+  usuarioNome: string,
+  unidadeId: string,
+): Omit<MovimentacaoEstoque, 'id'> {
   return {
-    itemEstoqueId,
+    itemId,
+    unidadeId,
     tipo,
     quantidade: 0,
-    userId,
-    timestamp: new Date().toISOString(),
+    usuarioId,
+    usuarioNome,
+    dataMovimentacao: new Date().toISOString(),
     observacoes: '',
   };
 }

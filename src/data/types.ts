@@ -403,45 +403,14 @@ export interface OrdemServico {
 }
 
 // ---------------------------------------------------------------------------
-// Optional Stock Module
+// Optional Stock Module — authoritative types live in stockTypes.ts
 // ---------------------------------------------------------------------------
-// Types below are only used when the inventory module is active.
-// Do NOT import these in pages/components unless the module is enabled.
-// They live here for central type management but carry no mandatory coupling.
+// This section exists for backward-compatibility and discoverability.
+// Do NOT redefine ItemEstoque or MovimentacaoEstoque here — import from
+// '@/data/stockTypes' when the inventory module is active.
 // ---------------------------------------------------------------------------
 
-export type MovimentacaoEstoqueTipo =
-  | 'entrada'
-  | 'saida'
-  | 'ajuste'
-  | 'reserva'
-  | 'cancelamento_reserva';
-
-export interface ItemEstoque {
-  id: string;
-  sku: string;
-  descricao: string;
-  tipo: TipoItemOS;
-  unidadeId: string;
-  quantidadeDisponivel: number;
-  quantidadeReservada: number;
-  quantidadeMinima: number;   // Alert threshold
-  custo: number;
-  precoVenda: number;
-  ativo: boolean;
-}
-
-export interface MovimentacaoEstoque {
-  id: string;
-  itemEstoqueId: string;
-  tipo: MovimentacaoEstoqueTipo;
-  quantidade: number;
-  saldoApos: number;
-  osId?: string;          // When tied to an OS
-  userId: string;
-  timestamp: string;
-  observacoes?: string;
-}
+export type { ItemEstoque, MovimentacaoEstoque } from './stockTypes';
 
 // ---------------------------------------------------------------------------
 // Convenience: Status label maps — typed to ensure exhaustiveness

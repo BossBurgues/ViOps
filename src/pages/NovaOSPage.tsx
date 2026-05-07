@@ -596,8 +596,11 @@ export default function NovaOSPage() {
               <div className="rounded-lg bg-muted/50 border border-border p-4 flex items-start gap-3">
                 <CheckCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-[13px] font-medium text-foreground">Pronto para enviar</p>
-                  <p className="text-[12px] text-muted-foreground">A OS será criada com status "Aberta" e encaminhada para a Central de Produção após confirmação.</p>
+                  <p className="text-[13px] font-medium text-foreground">Pronto para criar</p>
+                  <p className="text-[12px] text-muted-foreground">
+                    A OS será criada com status <span className="font-semibold text-foreground">“Aberta”</span>.
+                    Após a criação, utilize a OS para enviá-la à Central de Produção quando estiver pronta.
+                  </p>
                 </div>
               </div>
             </div>
@@ -629,8 +632,8 @@ export default function NovaOSPage() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Confirmar Criacao da OS"
-        description={`Criar OS para ${selectedCliente?.nome || 'cliente'} no valor de ${formatCurrency(totalItens)} com ${documentos.length} documento(s)? A OS sera encaminhada para a Central de Producao.`}
+        title="Confirmar Criação da OS"
+        description={`Criar OS para ${selectedCliente?.nome || 'cliente'} no valor de ${formatCurrency(totalItens)} com ${documentos.length} documento(s)? A OS será criada com status Aberta e poderá ser enviada à Central em seguida.`}
         confirmLabel="Criar OS"
         onConfirm={handleSubmit}
       />

@@ -92,16 +92,16 @@ export const OS_TRANSITIONS: OSTransition[] = [
     requiresConfirmation: true,
     confirmMessage: 'Esta acao nao pode ser desfeita. Confirma o cancelamento?',
   },
-  // --- Central → Unidade ---
+  // --- Central → Unidade — canonical forward path uses semantic alias ---
   {
     from: 'pronta',
-    to: 'enviada',
+    to: 'enviada_unidade',
     label: 'Enviar para Unidade',
     roles: ['admin', 'operador'],
     requiresConfirmation: true,
     confirmMessage: 'Confirma o envio desta OS para a unidade de origem?',
   },
-  // --- Unidade: entrega ---
+  // --- Legacy compat: 'enviada' → 'entregue' (for OSs persisted with the old status) ---
   {
     from: 'enviada',
     to: 'entregue',
