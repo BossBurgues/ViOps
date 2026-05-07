@@ -5,6 +5,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { ordensServico, formatCurrency, formatDate, unidades, clientes } from '@/data/mockData';
 import { useApp } from '@/contexts/AppContext';
 import { isParcelaVencida, isOrigemOtica } from '@/lib/financialStatus';
+import { getOSStatusColor } from '@/lib/osStatus';
 import { FileText, Factory, CheckCircle, Truck, AlertTriangle, DollarSign, TrendingUp, Clock, GripVertical, Settings2, RotateCcw, Save, Link2, Store, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
@@ -40,8 +41,6 @@ const defaultWidgets: Widget[] = [
   { id: 'flow', label: 'Fluxo Operacional', visible: true, size: 'third' },
 ];
 
-const COLORS = ['hsl(213 56% 28%)', 'hsl(207 75% 48%)', 'hsl(38 85% 48%)', 'hsl(158 50% 38%)', 'hsl(213 56% 48%)', 'hsl(0 60% 48%)'];
-
 export default function DashboardPage() {
   const { selectedUnidadeId, currentUser } = useApp();
   const [widgets, setWidgets, resetWidgets] = useDashboardLayout<Widget[]>(
@@ -55,11 +54,16 @@ export default function DashboardPage() {
     selectedUnidadeId === 'todas' || os.unidadeId === selectedUnidadeId
   );
 
-  const osAbertas = relevantOS.filter(os => os.status === 'recebida').length;
+  // OS status counts — each maps to a distinct step in the workflow
+  const osAbertas = relevantOS.filter(os => os.status === 'aberta').length;
+  const osEnviadasCentral = relevantOS.filter(os => os.status === 'enviada_central').length;
+  const osRecebidasCentral = relevantOS.filter(os => os.status === 'recebida').length;
   const osProducao = relevantOS.filter(os => os.status === 'producao').length;
-  const osProntas = relevantOS.filter(os => os.status === 'pronta' || os.status === 'enviada').length;
-  const osEntregues = relevantOS.filter(os => os.status === 'entregue').length;
   const osPendencias = relevantOS.filter(os => os.status === 'pendencia').length;
+  const osProntas = relevantOS.filter(os => os.status === 'pronta').length;
+  // 'enviada' is a legacy alias for 'enviada_unidade' — count both to avoid gaps
+  const osEnviadasUnidade = relevantOS.filter(os => os.status === 'enviada' || os.status === 'enviada_unidade').length;
+  const osEntregues = relevantOS.filter(os => os.status === 'entregue').length;
   const totalFaturamento = relevantOS.reduce((sum, os) => sum + os.valorTotal, 0);
   const ticketMedio = relevantOS.length > 0 ? totalFaturamento / relevantOS.length : 0;
 
@@ -88,11 +92,17 @@ export default function DashboardPage() {
   const totalEntradas = relevantOS.reduce((s, os) => s + (os.pagamento?.valorEntrada ?? 0), 0);
   const osHibridas = relevantOS.filter(os => os.pagamento?.valorEntrada && os.pagamento.metodoPagamentoComplementar).length;
 
-  const statusData = (['recebida', 'producao', 'pendencia', 'pronta', 'enviada', 'entregue'] as const).map((status, i) => ({
-    name: status.charAt(0).toUpperCase() + status.slice(1),
-    value: relevantOS.filter(os => os.status === status).length,
-    color: COLORS[i % COLORS.length],
-  })).filter(d => d.value > 0);
+  // Pie chart data — covers the full lifecycle. 'enviada_unidade' counts are merged into 'enviada' for display.
+  const statusData: { name: string; value: number; color: string }[] = [
+    { name: 'Aberta',           value: osAbertas,           color: getOSStatusColor('aberta') },
+    { name: 'Env. Central',     value: osEnviadasCentral,   color: getOSStatusColor('enviada_central') },
+    { name: 'Na Central',       value: osRecebidasCentral,  color: getOSStatusColor('recebida') },
+    { name: 'Em Produção',      value: osProducao,          color: getOSStatusColor('producao') },
+    { name: 'Pendência',        value: osPendencias,        color: getOSStatusColor('pendencia') },
+    { name: 'Pronta',           value: osProntas,           color: getOSStatusColor('pronta') },
+    { name: 'Env. Unidade',     value: osEnviadasUnidade,   color: getOSStatusColor('enviada_unidade') },
+    { name: 'Entregue',         value: osEntregues,         color: getOSStatusColor('entregue') },
+  ].filter(d => d.value > 0);
 
   const toggleWidget = (id: WidgetId) => {
     setWidgets(prev => prev.map(w => w.id === id && !w.fixed ? { ...w, visible: !w.visible } : w));
@@ -135,18 +145,18 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <KpiCard title="OS Abertas" value={osAbertas} icon={FileText} />
+              <KpiCard title="Env. para Central" value={osEnviadasCentral} icon={Truck} />
+              <KpiCard title="Na Central" value={osRecebidasCentral} icon={Clock} />
               <KpiCard title="Em Produção" value={osProducao} icon={Factory} />
-              <KpiCard title="Prontas/Enviadas" value={osProntas} icon={CheckCircle} />
-              <KpiCard title="Entregues" value={osEntregues} icon={Truck} />
-              <KpiCard title="Pendências" value={osPendencias} icon={AlertTriangle} />
+              <KpiCard title="Prontas" value={osProntas} icon={CheckCircle} />
               <KpiCard title="Faturamento" value={totalFaturamento} icon={DollarSign} isCurrency />
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <KpiCard title="Venda Ótica" value={osOtica} icon={Store} />
               <KpiCard title="Venda Externa" value={osExterna} icon={MapPin} />
-              <KpiCard title="Cobranças Híbridas" value={osHibridas} icon={Link2} />
-              <KpiCard title="Boletos em Aberto" value={boletosEmAberto} icon={DollarSign} />
-              <KpiCard title="Links Pendentes" value={linksPendentes} icon={Link2} />
+              <KpiCard title="Env. para Unidade" value={osEnviadasUnidade} icon={Truck} />
+              <KpiCard title="Entregues" value={osEntregues} icon={CheckCircle} />
+              <KpiCard title="Pendências" value={osPendencias} icon={AlertTriangle} />
               <KpiCard title="Inadimplente" value={parcelasVencidas.length} icon={AlertTriangle} />
             </div>
           </div>
@@ -279,18 +289,18 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
-              {osProntas > 0 && (
+              {(osProntas + osEnviadasUnidade) > 0 && (
                 <div className="flex items-start gap-3 py-3.5">
                   <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-info/10">
                     <Truck className="h-3.5 w-3.5 text-info" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{osProntas} OS aguardando retirada</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Prontas ou em trânsito</p>
+                    <p className="text-sm font-medium text-foreground">{osProntas} pronta(s) + {osEnviadasUnidade} a caminho da unidade</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Prontas ou em trânsito para a loja</p>
                   </div>
                 </div>
               )}
-              {osPendencias === 0 && parcelasVencidas.length === 0 && boletosVencidos === 0 && linksPendentes === 0 && osProntas === 0 && (
+              {osPendencias === 0 && parcelasVencidas.length === 0 && boletosVencidos === 0 && linksPendentes === 0 && osProntas === 0 && osEnviadasUnidade === 0 && (
                 <div className="flex items-center gap-3 py-6">
                   <CheckCircle className="h-4 w-4 text-success" />
                   <p className="text-[13px] text-muted-foreground">Nenhum alerta no momento</p>
@@ -305,7 +315,8 @@ export default function DashboardPage() {
           <div className="page-card px-6 py-5">
             <h3 className="section-title mb-4">Fila de Producao</h3>
             <div className="space-y-3">
-              {(['recebida', 'producao', 'pronta', 'enviada'] as const).map(status => {
+              {/* Production queue shows the full central flow, excluding terminal states */}
+              {(['enviada_central', 'recebida', 'producao', 'pendencia', 'pronta'] as const).map(status => {
                 const count = relevantOS.filter(os => os.status === status).length;
                 const total = relevantOS.length || 1;
                 const pct = (count / total) * 100;
