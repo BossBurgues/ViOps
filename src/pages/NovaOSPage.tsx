@@ -77,9 +77,15 @@ export default function NovaOSPage() {
   // Documents
   const [documentos, setDocumentos] = useState<OSDocumento[]>([]);
 
-  // Payment
-  const [formaPagamento, setFormaPagamento] = useState('');
-  const [parcelas, setParcelas] = useState('1');
+  // Payment state — hybrid model: entrada + saldo complementar
+  const [valorEntrada, setValorEntrada] = useState('');
+  const [metodoEntrada, setMetodoEntrada] = useState('');
+  const [statusEntrada, setStatusEntrada] = useState('paga');
+  const [metodoComplementar, setMetodoComplementar] = useState('sem_saldo');
+  const [numParcelas, setNumParcelas] = useState('1');
+  const [vencimentoPrimeiraParcela, setVencimentoPrimeiraParcela] = useState('');
+  const [statusCobranca, setStatusCobranca] = useState('pendente');
+  const [referenciaComprovante, setReferenciaComprovante] = useState('');
 
   if (!hasPermission(['admin', 'gestor', 'vendedor'])) {
     return (
@@ -116,11 +122,10 @@ export default function NovaOSPage() {
     if (step === 'cliente') {
       if (!clienteId) return false;
       if (origemVenda === 'otica') return !!unidadeId;
-      // For externa: localAcaoExterna is required
       return !!localAcaoExterna.trim();
     }
     if (step === 'itens') return itens.length > 0 && itens.every(i => i.descricao && i.valorUnitario > 0);
-    if (step === 'pagamento') return !!formaPagamento;
+    if (step === 'pagamento') return !!metodoEntrada;
     return true;
   };
 
@@ -142,8 +147,12 @@ export default function NovaOSPage() {
   };
 
   const handleSubmit = () => {
+    const temSaldo = metodoComplementar !== 'sem_saldo';
+    const descPgto = temSaldo
+      ? `Entrada ${metodoEntrada} + saldo ${metodoComplementar}`
+      : metodoEntrada;
     toast.success('Ordem de Serviço criada com sucesso', {
-      description: `OS ${origemVenda === 'externa' ? 'externa' : 'em ótica'} criada por ${currentUser.nome} para ${selectedCliente?.nome} com ${documentos.length} documento(s)`,
+      description: `OS ${origemVenda === 'externa' ? 'externa' : 'em ótica'} criada por ${currentUser.nome} para ${selectedCliente?.nome} — ${descPgto}`,
     });
     navigate('/ordens');
   };
@@ -479,52 +488,198 @@ export default function NovaOSPage() {
           {/* STEP: Pagamento */}
           {step === 'pagamento' && (
             <div className="space-y-6">
-              <h2 className="text-sm font-semibold text-foreground">Condicao de Pagamento</h2>
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Condição de Pagamento</h2>
+                <p className="text-[12px] text-muted-foreground mt-0.5">Configure a cobrança híbrida: entrada + método complementar.</p>
+              </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Forma de Pagamento</label>
-                  <Select value={formaPagamento} onValueChange={setFormaPagamento}>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pix">PIX</SelectItem>
-                      <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                      <SelectItem value="cartao_credito">Cartao de Credito</SelectItem>
-                      <SelectItem value="cartao_debito">Cartao de Debito</SelectItem>
-                      <SelectItem value="boleto">Boleto Bancario</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {/* Resumo do valor total */}
+              <div className="flex items-center justify-between rounded-lg bg-primary/5 border border-primary/15 px-4 py-3">
+                <span className="text-[12px] text-muted-foreground">Valor Total da OS</span>
+                <span className="text-base font-bold text-foreground">{formatCurrency(totalItens)}</span>
+              </div>
+
+              {/* ── Seção 1: Entrada ── */}
+              <div className="space-y-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">1. Entrada</p>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Valor da Entrada (R$)</label>
+                    <Input
+                      type="number" min={0} step={0.01}
+                      placeholder="0,00"
+                      value={valorEntrada}
+                      onChange={e => setValorEntrada(e.target.value)}
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">0 = sem entrada (saldo integral)</p>
+                  </div>
+
+                  <div>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Método da Entrada <span className="text-destructive">*</span></label>
+                    <Select value={metodoEntrada} onValueChange={setMetodoEntrada}>
+                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                        <SelectItem value="pix">Pix</SelectItem>
+                        <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
+                        <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                        <SelectItem value="maquina_mp">Mercado Pago Máquina</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Status da Entrada</label>
+                    <Select value={statusEntrada} onValueChange={setStatusEntrada}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="paga">Paga</SelectItem>
+                        <SelectItem value="pendente">Pendente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+
+                {/* Saldo auto-calculado */}
+                {(() => {
+                  const entrada = parseFloat(valorEntrada) || 0;
+                  const saldo = totalItens - entrada;
+                  return (
+                    <div className={`flex items-center justify-between rounded-md px-3 py-2.5 ${
+                      saldo < 0 ? 'bg-destructive/10 border border-destructive/30' : 'bg-muted/60 border border-border'
+                    }`}>
+                      <span className="text-[12px] text-muted-foreground">Saldo Restante</span>
+                      <span className={`text-sm font-bold ${
+                        saldo < 0 ? 'text-destructive' : saldo === 0 ? 'text-success' : 'text-foreground'
+                      }`}>
+                        {formatCurrency(Math.max(0, saldo))}
+                        {saldo < 0 && <span className="ml-2 text-[10px] font-normal">(entrada maior que o total)</span>}
+                        {saldo === 0 && entrada > 0 && <span className="ml-2 text-[10px] font-normal text-success">✔ Quitado na entrada</span>}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* ── Seção 2: Método Complementar ── */}
+              <div className="space-y-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">2. Saldo / Método Complementar</p>
+
                 <div>
-                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Parcelas</label>
-                  <Select value={parcelas} onValueChange={setParcelas}>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Método para o Saldo</label>
+                  <Select value={metodoComplementar} onValueChange={setMetodoComplementar}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {[1,2,3,4,5,6,7,8,9,10,12].map(n => (
-                        <SelectItem key={n} value={String(n)}>
-                          {n}x de {formatCurrency(totalItens / n)}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="sem_saldo">Sem saldo (entrada única / quitado)</SelectItem>
+                      <SelectItem value="boleto">Boleto Sicoob</SelectItem>
+                      <SelectItem value="pix">Pix</SelectItem>
+                      <SelectItem value="cartao">Cartão (crédito ou débito)</SelectItem>
+                      <SelectItem value="link_pagamento">Link Mercado Pago</SelectItem>
+                      <SelectItem value="qr_mercado_pago">QR Code Mercado Pago</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Campos condicionais — aparecem somente quando há saldo */}
+                {metodoComplementar !== 'sem_saldo' && (
+                  <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div>
+                        <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Parcelas do Saldo</label>
+                        <Select value={numParcelas} onValueChange={setNumParcelas}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {[1,2,3,4,5,6,7,8,9,10,12].map(n => {
+                              const saldo = Math.max(0, totalItens - (parseFloat(valorEntrada) || 0));
+                              return (
+                                <SelectItem key={n} value={String(n)}>
+                                  {n}x {n > 1 ? `de ${formatCurrency(saldo / n)}` : '(integral)'}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Vencimento 1ª Parcela</label>
+                        <Input
+                          type="date"
+                          value={vencimentoPrimeiraParcela}
+                          onChange={e => setVencimentoPrimeiraParcela(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Status da Cobrança</label>
+                        <Select value={statusCobranca} onValueChange={setStatusCobranca}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="gerada">Gerada</SelectItem>
+                            <SelectItem value="enviada">Enviada ao cliente</SelectItem>
+                            <SelectItem value="pendente">Pendente</SelectItem>
+                            <SelectItem value="paga">Paga</SelectItem>
+                            <SelectItem value="vencida">Vencida</SelectItem>
+                            <SelectItem value="expirada">Expirada</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Info contextual por método */}
+                    {metodoComplementar === 'boleto' && (
+                      <div className="flex items-start gap-2 rounded-md bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-900/40 px-3 py-2">
+                        <span className="text-[11px] text-sky-700 dark:text-sky-300">
+                          🏦 Boleto Sicoob — a emissão será registrada manualmente após criação da OS.
+                        </span>
+                      </div>
+                    )}
+                    {(metodoComplementar === 'link_pagamento' || metodoComplementar === 'qr_mercado_pago') && (
+                      <div className="flex items-start gap-2 rounded-md bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-900/40 px-3 py-2">
+                        <span className="text-[11px] text-violet-700 dark:text-violet-300">
+                          🔗 Link / QR Mercado Pago — o link será gerado e enviado ao cliente após criação da OS. Não é cobrança automática.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div className="rounded-lg bg-muted/50 p-4 space-y-2">
-                <div className="flex justify-between text-[13px]">
-                  <span className="text-muted-foreground">Valor Total</span>
-                  <span className="font-bold text-foreground">{formatCurrency(totalItens)}</span>
-                </div>
-                <div className="flex justify-between text-[13px]">
-                  <span className="text-muted-foreground">Forma</span>
-                  <span className="font-medium text-foreground">{formaPagamento || '-'}</span>
-                </div>
-                <div className="flex justify-between text-[13px]">
-                  <span className="text-muted-foreground">Parcelas</span>
-                  <span className="font-medium text-foreground">{parcelas}x de {formatCurrency(totalItens / parseInt(parcelas))}</span>
-                </div>
+              {/* ── Seção 3: Comprovante ── */}
+              <div className="space-y-3">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">3. Comprovante / Referência</p>
+                <Input
+                  placeholder="Nº do comprovante, referência do Pix, código de pagamento..."
+                  value={referenciaComprovante}
+                  onChange={e => setReferenciaComprovante(e.target.value)}
+                />
+                <p className="text-[11px] text-muted-foreground">Opcional. Anote a referência do pagamento da entrada para rastreabilidade.</p>
               </div>
+
+              {/* Resumo vivo */}
+              {metodoEntrada && (
+                <div className="rounded-lg border border-border divide-y divide-border/50">
+                  <div className="px-4 py-2.5 flex justify-between text-[12px]">
+                    <span className="text-muted-foreground">Entrada ({metodoEntrada})</span>
+                    <span className={`font-semibold ${statusEntrada === 'paga' ? 'text-success' : 'text-warning'}`}>
+                      {formatCurrency(parseFloat(valorEntrada) || 0)} — {statusEntrada}
+                    </span>
+                  </div>
+                  {metodoComplementar !== 'sem_saldo' && (
+                    <div className="px-4 py-2.5 flex justify-between text-[12px]">
+                      <span className="text-muted-foreground">Saldo ({metodoComplementar}) {numParcelas}x</span>
+                      <span className="font-semibold text-foreground">
+                        {formatCurrency(Math.max(0, totalItens - (parseFloat(valorEntrada) || 0)))}
+                      </span>
+                    </div>
+                  )}
+                  <div className="px-4 py-2.5 flex justify-between text-[13px]">
+                    <span className="font-bold text-foreground">Total</span>
+                    <span className="font-bold text-foreground">{formatCurrency(totalItens)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -635,9 +790,65 @@ export default function NovaOSPage() {
                 )}
               </div>
 
-              <div className="rounded-lg border border-border p-4 space-y-2">
-                <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Pagamento</p>
-                <p className="text-sm font-medium text-foreground">{formaPagamento || '-'} — {parcelas}x de {formatCurrency(totalItens / parseInt(parcelas))}</p>
+              {/* Pagamento summary */}
+              <div className="rounded-lg border border-border divide-y divide-border/60">
+                <div className="px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">Pagamento</p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[12px]">
+                    <div>
+                      <span className="text-muted-foreground">Total: </span>
+                      <span className="font-bold text-foreground">{formatCurrency(totalItens)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Entrada: </span>
+                      <span className="font-medium text-foreground">{formatCurrency(parseFloat(valorEntrada) || 0)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Método entrada: </span>
+                      <span className="font-medium text-foreground capitalize">{metodoEntrada || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Status entrada: </span>
+                      <span className={`font-medium ${statusEntrada === 'paga' ? 'text-success' : 'text-warning'}`}>
+                        {statusEntrada}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Saldo restante: </span>
+                      <span className="font-medium text-foreground">
+                        {formatCurrency(Math.max(0, totalItens - (parseFloat(valorEntrada) || 0)))}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Método saldo: </span>
+                      <span className="font-medium text-foreground">
+                        {metodoComplementar === 'sem_saldo' ? 'Quitado' : metodoComplementar}
+                      </span>
+                    </div>
+                    {metodoComplementar !== 'sem_saldo' && (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground">Parcelas: </span>
+                          <span className="font-medium text-foreground">{numParcelas}x</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">1ª parcela: </span>
+                          <span className="font-medium text-foreground">{vencimentoPrimeiraParcela || '-'}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground">Status cobrança: </span>
+                          <span className="font-medium text-foreground capitalize">{statusCobranca}</span>
+                        </div>
+                      </>
+                    )}
+                    {referenciaComprovante && (
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Comprovante: </span>
+                        <span className="font-medium text-foreground font-mono text-[11px]">{referenciaComprovante}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {observacoes && (
