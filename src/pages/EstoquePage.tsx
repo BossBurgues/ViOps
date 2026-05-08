@@ -691,9 +691,12 @@ export default function EstoquePage() {
                   <Select value={movForm.tipo} onValueChange={v => setMovForm(f => ({ ...f, tipo: v as TipoMovimentacao }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {(Object.entries(TIPO_MOVIMENTACAO_LABELS) as [TipoMovimentacao, string][]).map(([k, v]) => (
-                        <SelectItem key={k} value={k}>{v}</SelectItem>
-                      ))}
+                      {(Object.entries(TIPO_MOVIMENTACAO_LABELS) as [TipoMovimentacao, string][])
+                        // 'transferencia' oculta até existência de unidade de destino
+                        .filter(([k]) => k !== 'transferencia')
+                        .map(([k, v]) => (
+                          <SelectItem key={k} value={k}>{v}</SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -714,6 +717,25 @@ export default function EstoquePage() {
                   </div>
                 </div>
               )}
+              {/* Aviso de origem do estoque para baixas de OS externa */}
+              {movForm.tipo === 'baixa_os' && (() => {
+                const item = itensAtivos.find(i => i.id === movForm.itemId);
+                const isCentral = item?.unidadeId === 'u0';
+                return (
+                  <div className={`rounded-md px-3 py-2.5 text-[11px] flex items-start gap-2 ${
+                    isCentral
+                      ? 'bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800/40 text-violet-700 dark:text-violet-300'
+                      : 'bg-muted/50 text-muted-foreground'
+                  }`}>
+                    <span className="mt-0.5 shrink-0">{isCentral ? '🏭' : 'ℹ️'}</span>
+                    <span>
+                      {isCentral
+                        ? 'Origem do estoque: Central/Fábrica — movimentações de OS externas saem do estoque da Central.'
+                        : 'Para OS externas, o item consumido deve pertencer ao estoque da Central/Fábrica.'}
+                    </span>
+                  </div>
+                );
+              })()}
               <div>
                 <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Observação</label>
                 <Textarea rows={2} placeholder="Motivo da movimentação, NF, referência..." value={movForm.observacao} onChange={e => setMovForm(f => ({ ...f, observacao: e.target.value }))} />

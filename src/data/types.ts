@@ -370,6 +370,33 @@ export interface AssinaturaCliente {
 }
 
 // ---------------------------------------------------------------------------
+// External Action Data — structured location info for OS externa
+// Replaces the free-text localAcaoExterna going forward.
+// localAcaoExterna is derived from this struct for backward compat.
+// ---------------------------------------------------------------------------
+
+export interface DadosAcaoExterna {
+  /** Name of the location, company, or event where the sale took place */
+  nomeLocal?: string;
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+  pontoReferencia?: string;
+  /** Person responsible at the location (not the seller) */
+  responsavelLocal?: string;
+  telefoneContato?: string;
+  /** Seller or external team who performed the sale */
+  vendedorEquipe?: string;
+  /** ISO date of the field action */
+  dataAcao?: string;
+  observacoesAcao?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Ordem de Serviço — Core Entity
 // ---------------------------------------------------------------------------
 
@@ -402,9 +429,15 @@ export interface OrdemServico {
   assinaturaCliente?: AssinaturaCliente;
   /**
    * For external sales: where the sale took place.
+   * Derived from dadosAcaoExterna when the structured form is used.
    * e.g. "Empresa Alfa Ltda", "Residência do cliente", "Evento SESC"
    */
   localAcaoExterna?: string;
+  /**
+   * Structured location/action data for external sales.
+   * Replaces localAcaoExterna as the primary source for new OS externa records.
+   */
+  dadosAcaoExterna?: DadosAcaoExterna;
 
   // Workflow
   status: OSStatus;

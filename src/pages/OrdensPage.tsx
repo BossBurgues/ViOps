@@ -17,8 +17,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const statusOptions: (OSStatus | 'todos')[] = [
-  'todos', 'aberta', 'recebida', 'producao', 'pendencia', 'pronta', 'enviada', 'entregue', 'cancelada',
+  'todos', 'aberta', 'enviada_central', 'recebida', 'producao', 'pendencia',
+  'pronta', 'enviada_unidade', 'enviada', 'entregue', 'cancelada',
 ];
+
 
 const statusFilterLabels: Record<OSStatus | 'todos', string> = {
   todos: 'Todos',

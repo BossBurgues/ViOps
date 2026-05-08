@@ -74,7 +74,26 @@ export const itensEstoque: ItemEstoque[] = [
     id: 'sku09', unidadeId: 'u2', categoria: 'armacao', nome: 'Armação Grazi Collection GZ3090',
     marca: 'Grazi', referencia: 'GZ3090-RSG', saldoAtual: 4, estoqueMinimo: 3,
     precoCusto: 260.00, precoVenda: 550.00, ativo: true,
-    criadoEm: '2025-02-05T08:00:00',
+    criadoEm: '2025-01-12T08:00:00',
+  },
+  // Unit u0 — Central / Fábrica (itens consumidos pelas OS externas)
+  {
+    id: 'sku10', unidadeId: 'u0', categoria: 'lente', nome: 'Lente Zeiss Individual 2 (Central)',
+    marca: 'Zeiss', referencia: 'ZEISS-IND2-CTR', saldoAtual: 6, estoqueMinimo: 4,
+    precoCusto: 440.00, precoVenda: 900.00, ativo: true,
+    criadoEm: '2025-01-10T08:00:00',
+  },
+  {
+    id: 'sku11', unidadeId: 'u0', categoria: 'armacao', nome: 'Armação Tom Ford FT5401 (Central)',
+    marca: 'Tom Ford', referencia: 'TF5401-CTR', saldoAtual: 4, estoqueMinimo: 2,
+    precoCusto: 890.00, precoVenda: 1800.00, ativo: true,
+    criadoEm: '2025-01-12T08:00:00',
+  },
+  {
+    id: 'sku12', unidadeId: 'u0', categoria: 'lente', nome: 'Lente Transitions Signature Gen 8 (Central)',
+    marca: 'Transitions', referencia: 'TRANS-G8-CTR', saldoAtual: 8, estoqueMinimo: 3,
+    precoCusto: 370.00, precoVenda: 750.00, ativo: true,
+    criadoEm: '2025-01-12T08:00:00',
   },
 ];
 
@@ -115,16 +134,19 @@ export const movimentacoesEstoque: MovimentacaoEstoque[] = [
     usuarioId: 'usr3', usuarioNome: 'Fernando Costa',
     dataMovimentacao: '2025-03-01T11:00:00',
   },
+  // Baixa por OS externa os4 — estoque sai da Central/Fábrica (sku10)
   {
-    id: 'mov06', itemId: 'sku04', unidadeId: 'u1', tipo: 'baixa_os', quantidade: 2,
+    id: 'mov06', itemId: 'sku10', unidadeId: 'u0', tipo: 'baixa_os', quantidade: 2,
     osId: 'os4', osNumero: 'OS-2025-0004',
     usuarioId: 'usr5', usuarioNome: 'Marcos Silva',
+    observacao: 'Baixa OS externa — estoque Central/Fábrica',
     dataMovimentacao: '2025-04-06T09:00:00',
   },
   {
-    id: 'mov07', itemId: 'sku04', unidadeId: 'u1', tipo: 'baixa_os', quantidade: 2,
+    id: 'mov07', itemId: 'sku10', unidadeId: 'u0', tipo: 'baixa_os', quantidade: 2,
     osId: 'os8', osNumero: 'OS-2025-0008',
-    usuarioId: 'usr3', usuarioNome: 'Fernando Costa',
+    usuarioId: 'usr5', usuarioNome: 'Marcos Silva',
+    observacao: 'Baixa OS externa — estoque Central/Fábrica',
     dataMovimentacao: '2025-04-10T09:00:00',
   },
   // Saída manual
@@ -148,22 +170,24 @@ export const movimentacoesEstoque: MovimentacaoEstoque[] = [
     observacao: 'Chegada pedido Tom Ford',
     dataMovimentacao: '2025-04-03T10:00:00',
   },
+  // Unit u0 — Central/Fábrica: entrada e baixas de OS externas
   {
-    id: 'mov11', itemId: 'sku07', unidadeId: 'u2', tipo: 'baixa_os', quantidade: 1,
-    osId: 'os7', osNumero: 'OS-2025-0007',
-    usuarioId: 'usr4', usuarioNome: 'Juliana Ribeiro',
-    dataMovimentacao: '2025-04-07T15:00:00',
+    id: 'mov14', itemId: 'sku10', unidadeId: 'u0', tipo: 'entrada', quantidade: 10,
+    usuarioId: 'usr5', usuarioNome: 'Marcos Silva',
+    observacao: 'Estoque inicial Central — Zeiss Individual 2',
+    dataMovimentacao: '2025-03-15T09:00:00',
   },
   {
-    id: 'mov12', itemId: 'sku08', unidadeId: 'u2', tipo: 'entrada', quantidade: 8,
-    usuarioId: 'usr4', usuarioNome: 'Juliana Ribeiro',
-    observacao: 'Reposição Transitions Q2',
-    dataMovimentacao: '2025-04-03T10:30:00',
+    id: 'mov15', itemId: 'sku11', unidadeId: 'u0', tipo: 'entrada', quantidade: 6,
+    usuarioId: 'usr5', usuarioNome: 'Marcos Silva',
+    observacao: 'Estoque inicial Central — Tom Ford FT5401',
+    dataMovimentacao: '2025-03-15T09:15:00',
   },
   {
-    id: 'mov13', itemId: 'sku08', unidadeId: 'u2', tipo: 'baixa_os', quantidade: 2,
-    osId: 'os9', osNumero: 'OS-2025-0009',
-    usuarioId: 'usr4', usuarioNome: 'Juliana Ribeiro',
-    dataMovimentacao: '2025-04-09T08:30:00',
+    id: 'mov16', itemId: 'sku12', unidadeId: 'u0', tipo: 'entrada', quantidade: 10,
+    usuarioId: 'usr5', usuarioNome: 'Marcos Silva',
+    observacao: 'Estoque inicial Central — Transitions Signature Gen 8',
+    dataMovimentacao: '2025-03-15T09:30:00',
   },
 ];
+
