@@ -1,21 +1,27 @@
-// Badge component for OS sale origin — Venda em Ótica vs Venda Externa.
+// Badge component for OS sale origin — Venda em Ótica vs Venda Externa (Central/Fábrica).
+// The optional canalOperacional prop clarifies organizational ownership for external sales.
 // Reutilizável em listagem, detalhe e formulário de revisão.
 
 import { Store, MapPin } from 'lucide-react';
-import { OrigemVenda } from '@/data/types';
+import { OrigemVenda, CanalOperacional } from '@/data/types';
 
 interface OSOrigemBadgeProps {
   origem: OrigemVenda;
+  /** Explicit operational channel — used to label 'Central — Externa' correctly */
+  canalOperacional?: CanalOperacional;
   /** Show an optional secondary label (e.g. the external location) */
   localAcao?: string;
   size?: 'sm' | 'md';
 }
 
-export function OSOrigemBadge({ origem, localAcao, size = 'sm' }: OSOrigemBadgeProps) {
-  const isExterna = origem === 'externa';
+export function OSOrigemBadge({ origem, canalOperacional, localAcao, size = 'sm' }: OSOrigemBadgeProps) {
+  const isExterna = origem === 'externa' || canalOperacional === 'externa';
   const textSize = size === 'md' ? 'text-[12px]' : 'text-[10px]';
   const iconSize = size === 'md' ? 'h-3.5 w-3.5' : 'h-3 w-3';
   const px = size === 'md' ? 'px-2.5 py-1' : 'px-2 py-0.5';
+
+  // Label: external sales explicitly show the organizational owner (Central/Fábrica)
+  const label = isExterna ? 'Central — Externa' : 'Venda Ótica';
 
   return (
     <span
@@ -30,7 +36,7 @@ export function OSOrigemBadge({ origem, localAcao, size = 'sm' }: OSOrigemBadgeP
       ) : (
         <Store className={iconSize} />
       )}
-      {isExterna ? 'Venda Externa' : 'Venda Ótica'}
+      {label}
       {isExterna && localAcao && (
         <span className="opacity-70 font-normal">· {localAcao}</span>
       )}

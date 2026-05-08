@@ -11,22 +11,30 @@ export const rede: Rede = {
 };
 
 export const unidades: Unidade[] = [
-  { id: 'u1', redeId: 'r1', nome: 'Visual Premium - Centro', cidade: 'Curitiba', uf: 'PR', telefone: '(41) 3333-1001', ativa: true },
-  { id: 'u2', redeId: 'r1', nome: 'Visual Premium - Batel', cidade: 'Curitiba', uf: 'PR', telefone: '(41) 3333-1002', ativa: true },
-  { id: 'u3', redeId: 'r1', nome: 'Visual Premium - Shopping Barigui', cidade: 'Curitiba', uf: 'PR', telefone: '(41) 3333-1003', ativa: true },
-  { id: 'u4', redeId: 'r1', nome: 'Visual Premium - Londrina', cidade: 'Londrina', uf: 'PR', telefone: '(43) 3333-2001', ativa: true },
-  { id: 'u5', redeId: 'r1', nome: 'Visual Premium - Maringa', cidade: 'Maringa', uf: 'PR', telefone: '(44) 3333-3001', ativa: false },
+  {
+    id: 'u0', redeId: 'r1',
+    nome: 'Visual Premium - Central / Fábrica',
+    cidade: 'Curitiba', uf: 'PR', telefone: '(41) 3333-1000',
+    ativa: true, tipo: 'central_fabrica',
+  },
+  { id: 'u1', redeId: 'r1', nome: 'Visual Premium - Centro',            cidade: 'Curitiba',  uf: 'PR', telefone: '(41) 3333-1001', ativa: true,  tipo: 'otica' },
+  { id: 'u2', redeId: 'r1', nome: 'Visual Premium - Batel',             cidade: 'Curitiba',  uf: 'PR', telefone: '(41) 3333-1002', ativa: true,  tipo: 'otica' },
+  { id: 'u3', redeId: 'r1', nome: 'Visual Premium - Shopping Barigui',  cidade: 'Curitiba',  uf: 'PR', telefone: '(41) 3333-1003', ativa: true,  tipo: 'otica' },
+  { id: 'u4', redeId: 'r1', nome: 'Visual Premium - Londrina',          cidade: 'Londrina',  uf: 'PR', telefone: '(43) 3333-2001', ativa: true,  tipo: 'otica' },
+  { id: 'u5', redeId: 'r1', nome: 'Visual Premium - Maringa',           cidade: 'Maringa',   uf: 'PR', telefone: '(44) 3333-3001', ativa: false, tipo: 'otica' },
 ];
 
 export const usuarios: User[] = [
-  { id: 'usr1', nome: 'Ricardo Almeida', email: 'ricardo@viops.com', role: 'admin', unidadeId: 'u1', ativo: true },
-  { id: 'usr2', nome: 'Carla Mendes', email: 'carla@viops.com', role: 'gestor', unidadeId: 'u1', ativo: true },
-  { id: 'usr3', nome: 'Fernando Costa', email: 'fernando@viops.com', role: 'vendedor', unidadeId: 'u1', ativo: true },
-  { id: 'usr4', nome: 'Juliana Ribeiro', email: 'juliana@viops.com', role: 'vendedor', unidadeId: 'u2', ativo: true },
-  { id: 'usr5', nome: 'Marcos Silva', email: 'marcos@viops.com', role: 'operador', unidadeId: 'u1', ativo: true },
-  { id: 'usr6', nome: 'Patricia Nunes', email: 'patricia@viops.com', role: 'financeiro', unidadeId: 'u1', ativo: true },
-  { id: 'usr7', nome: 'Andre Souza', email: 'andre@viops.com', role: 'vendedor', unidadeId: 'u3', ativo: true },
-  { id: 'usr8', nome: 'Lucia Ferreira', email: 'lucia@viops.com', role: 'gestor', unidadeId: 'u4', ativo: true },
+  { id: 'usr1', nome: 'Ricardo Almeida',   email: 'ricardo@viops.com',   role: 'admin',      unidadeId: 'u1', ativo: true },
+  { id: 'usr2', nome: 'Carla Mendes',      email: 'carla@viops.com',     role: 'gestor',     unidadeId: 'u1', ativo: true },
+  { id: 'usr3', nome: 'Fernando Costa',   email: 'fernando@viops.com',  role: 'vendedor',   unidadeId: 'u1', ativo: true },
+  { id: 'usr4', nome: 'Juliana Ribeiro',  email: 'juliana@viops.com',   role: 'vendedor',   unidadeId: 'u2', ativo: true },
+  { id: 'usr5', nome: 'Marcos Silva',     email: 'marcos@viops.com',    role: 'operador',   unidadeId: 'u0', ativo: true },
+  { id: 'usr6', nome: 'Patricia Nunes',   email: 'patricia@viops.com',  role: 'financeiro', unidadeId: 'u0', ativo: true },
+  { id: 'usr7', nome: 'Andre Souza',      email: 'andre@viops.com',     role: 'vendedor',   unidadeId: 'u3', ativo: true },
+  { id: 'usr8', nome: 'Lucia Ferreira',   email: 'lucia@viops.com',     role: 'gestor',     unidadeId: 'u4', ativo: true },
+  // Vendedor externo — vinculado à Central/Fábrica, responsável por vendas de campo
+  { id: 'usr9', nome: 'Roberto Prado',    email: 'roberto.prado@viops.com', role: 'vendedor', unidadeId: 'u0', ativo: true },
 ];
 
 export const clientes: Cliente[] = [
@@ -44,7 +52,7 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os1', numero: 'OS-2025-0001', clienteId: 'c1', clienteNome: 'Maria Helena Souza',
     unidadeId: 'u1', unidadeNome: 'Visual Premium - Centro', status: 'entregue',
-    origemVenda: 'otica',
+    origemVenda: 'otica', canalOperacional: 'loja',
     dataCriacao: '2025-03-01', dataPrevisao: '2025-03-08', dataEntrega: '2025-03-07',
     valorTotal: 1850.00, observacoes: 'Lentes multifocais com antirreflexo premium',
     vendedorId: 'usr3', vendedorNome: 'Fernando Costa', prioridade: 'normal',
@@ -71,7 +79,7 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os2', numero: 'OS-2025-0002', clienteId: 'c2', clienteNome: 'Jose Carlos Pereira',
     unidadeId: 'u2', unidadeNome: 'Visual Premium - Batel', status: 'producao',
-    origemVenda: 'otica',
+    origemVenda: 'otica', canalOperacional: 'loja',
     dataCriacao: '2025-04-02', dataPrevisao: '2025-04-10',
     valorTotal: 2340.00, observacoes: 'Oculos de sol com grau, lentes transitions',
     vendedorId: 'usr4', vendedorNome: 'Juliana Ribeiro', prioridade: 'normal',
@@ -96,7 +104,7 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os3', numero: 'OS-2025-0003', clienteId: 'c3', clienteNome: 'Ana Paula Rodrigues',
     unidadeId: 'u1', unidadeNome: 'Visual Premium - Centro', status: 'pronta',
-    origemVenda: 'otica',
+    origemVenda: 'otica', canalOperacional: 'loja',
     dataCriacao: '2025-04-03', dataPrevisao: '2025-04-11',
     valorTotal: 980.00, observacoes: 'Lentes simples com blue light',
     vendedorId: 'usr3', vendedorNome: 'Fernando Costa', prioridade: 'normal',
@@ -117,9 +125,12 @@ export const ordensServico: OrdemServico[] = [
     },
   },
   {
+    // OS4 — Venda externa executada pela Central/Fábrica
     id: 'os4', numero: 'OS-2025-0004', clienteId: 'c4', clienteNome: 'Roberto Martins',
-    unidadeId: 'u4', unidadeNome: 'Visual Premium - Londrina', status: 'pendencia',
-    origemVenda: 'externa',
+    unidadeId: 'u0', unidadeNome: 'Visual Premium - Central / Fábrica', status: 'pendencia',
+    origemVenda: 'externa', canalOperacional: 'externa',
+    localAcaoExterna: 'Empresa Metron Industrial — Setor Administrativo',
+    vendedorExternoNome: 'Roberto Prado',
     dataCriacao: '2025-04-05', dataPrevisao: '2025-04-14',
     valorTotal: 3200.00, observacoes: 'Aguardando confirmacao de receita atualizada — venda externa',
     vendedorId: 'usr8', vendedorNome: 'Lucia Ferreira', prioridade: 'alta',
@@ -164,7 +175,7 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os5', numero: 'OS-2025-0005', clienteId: 'c5', clienteNome: 'Fernanda Lima Castro',
     unidadeId: 'u3', unidadeNome: 'Visual Premium - Shopping Barigui', status: 'recebida',
-    origemVenda: 'otica',
+    origemVenda: 'otica', canalOperacional: 'loja',
     dataCriacao: '2025-04-09', dataPrevisao: '2025-04-17',
     valorTotal: 1560.00, observacoes: 'Cliente VIP, prioridade na producao',
     vendedorId: 'usr7', vendedorNome: 'Andre Souza', prioridade: 'urgente',
@@ -186,7 +197,7 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os6', numero: 'OS-2025-0006', clienteId: 'c6', clienteNome: 'Paulo Henrique Dias',
     unidadeId: 'u1', unidadeNome: 'Visual Premium - Centro', status: 'enviada',
-    origemVenda: 'otica',
+    origemVenda: 'otica', canalOperacional: 'loja',
     dataCriacao: '2025-04-01', dataPrevisao: '2025-04-09',
     valorTotal: 1120.00, observacoes: '',
     vendedorId: 'usr3', vendedorNome: 'Fernando Costa', prioridade: 'normal',
@@ -208,9 +219,12 @@ export const ordensServico: OrdemServico[] = [
     },
   },
   {
+    // OS7 — Venda externa executada pela Central/Fábrica
     id: 'os7', numero: 'OS-2025-0007', clienteId: 'c7', clienteNome: 'Claudia Beatriz Ferreira',
-    unidadeId: 'u2', unidadeNome: 'Visual Premium - Batel', status: 'producao',
-    origemVenda: 'externa',
+    unidadeId: 'u0', unidadeNome: 'Visual Premium - Central / Fábrica', status: 'producao',
+    origemVenda: 'externa', canalOperacional: 'externa',
+    localAcaoExterna: 'Clínica Bem Estar — Campanha de Saude Ocular',
+    vendedorExternoNome: 'Roberto Prado',
     dataCriacao: '2025-04-07', dataPrevisao: '2025-04-15',
     valorTotal: 4500.00, observacoes: 'Duas armacoes, lentes premium — cliente externo',
     vendedorId: 'usr4', vendedorNome: 'Juliana Ribeiro', prioridade: 'normal',
@@ -255,7 +269,7 @@ export const ordensServico: OrdemServico[] = [
   {
     id: 'os8', numero: 'OS-2025-0008', clienteId: 'c8', clienteNome: 'Sergio Luiz Oliveira',
     unidadeId: 'u1', unidadeNome: 'Visual Premium - Centro', status: 'recebida',
-    origemVenda: 'otica',
+    origemVenda: 'otica', canalOperacional: 'loja',
     dataCriacao: '2025-04-10', dataPrevisao: '2025-04-18',
     valorTotal: 890.00, observacoes: 'Oculos de leitura simples',
     vendedorId: 'usr3', vendedorNome: 'Fernando Costa', prioridade: 'normal',
@@ -274,14 +288,14 @@ export const ordensServico: OrdemServico[] = [
     },
   },
   // -----------------------------------------------------------------
-  // OS9 — Cobrança híbrida: entrada em dinheiro + saldo por boleto Sicoob
-  // Demonstrates: valorEntrada, metodoPagamentoComplementar, Boleto Sicoob-ready
+  // OS9 — Venda externa (Central/Fábrica) — entrada em dinheiro + saldo por boleto Sicoob
   // -----------------------------------------------------------------
   {
     id: 'os9', numero: 'OS-2025-0009', clienteId: 'c3', clienteNome: 'Ana Paula Rodrigues',
-    unidadeId: 'u2', unidadeNome: 'Visual Premium - Batel', status: 'pronta',
-    origemVenda: 'externa',
+    unidadeId: 'u0', unidadeNome: 'Visual Premium - Central / Fábrica', status: 'pronta',
+    origemVenda: 'externa', canalOperacional: 'externa',
     localAcaoExterna: 'Empresa Tec & Cia — Setor RH',
+    vendedorExternoNome: 'Roberto Prado',
     dataCriacao: '2025-04-08', dataPrevisao: '2025-04-16',
     valorTotal: 2400.00,
     observacoes: 'Venda externa — entrada em dinheiro na visita. Saldo em boleto Sicoob a vencer em 30 dias.',
@@ -297,14 +311,14 @@ export const ordensServico: OrdemServico[] = [
     ],
     pagamento: {
       id: 'p9', osId: 'os9',
-      formaPagamento: 'Entrada Dinheiro + Boleto Sicoob',
+      formaPagamento: 'Entrada Dinheiro + Boleto Bancário',
       metodo: 'dinheiro' as const,
       valorTotal: 2400.00,
       valorEntrada: 900.00,
       metodoPagamentoComplementar: 'boleto' as const,
-      metodoPagamentoComplementarLabel: 'Boleto Sicoob',
+      metodoPagamentoComplementarLabel: 'Boleto Bancário',
       valorComplementar: 1500.00,
-      observacoes: 'Entrada R$ 900,00 paga na visita. Saldo R$ 1.500,00 em boleto Sicoob a vencer em 30 dias da entrega.',
+      observacoes: 'Entrada R$ 900,00 paga na visita. Saldo R$ 1.500,00 em boleto bancário a vencer em 30 dias da entrega.',
       parcelas: [
         {
           id: 'pc29', numero: 1, valor: 900.00, vencimento: '2025-04-08',
@@ -335,13 +349,12 @@ export const ordensServico: OrdemServico[] = [
     },
   },
   // -----------------------------------------------------------------
-  // OS10 — Cobrança híbrida: entrada em Pix + saldo por link Mercado Pago
-  // Demonstrates: PaymentIntent com status 'enviado' (gerado, não pago)
+  // OS10 — Venda em ótica (loja) — entrada Pix + saldo por link Mercado Pago
   // -----------------------------------------------------------------
   {
     id: 'os10', numero: 'OS-2025-0010', clienteId: 'c6', clienteNome: 'Paulo Henrique Dias',
     unidadeId: 'u1', unidadeNome: 'Visual Premium - Centro', status: 'recebida',
-    origemVenda: 'otica',
+    origemVenda: 'otica', canalOperacional: 'loja',
     dataCriacao: '2025-04-11', dataPrevisao: '2025-04-19',
     valorTotal: 1750.00,
     observacoes: 'Cliente pagou entrada no Pix. Saldo enviado via link Mercado Pago. Aguardando confirmação.',
@@ -355,14 +368,14 @@ export const ordensServico: OrdemServico[] = [
     ],
     pagamento: {
       id: 'p10', osId: 'os10',
-      formaPagamento: 'Entrada Pix + Link Mercado Pago',
+      formaPagamento: 'Entrada Pix + Link de Pagamento',
       metodo: 'pix' as const,
       valorTotal: 1750.00,
       valorEntrada: 550.00,
       metodoPagamentoComplementar: 'link_pagamento' as const,
-      metodoPagamentoComplementarLabel: 'Link Mercado Pago',
+      metodoPagamentoComplementarLabel: 'Link de Pagamento',
       valorComplementar: 1200.00,
-      observacoes: 'Entrada R$ 550,00 via Pix confirmada. Link de R$ 1.200,00 enviado pelo WhatsApp. Aguardando pagamento.',
+      observacoes: 'Entrada R$ 550,00 via Pix confirmada. Link de pagamento de R$ 1.200,00 enviado pelo WhatsApp. Aguardando pagamento.',
       parcelas: [
         {
           id: 'pc31', numero: 1, valor: 550.00, vencimento: '2025-04-11',
@@ -373,10 +386,10 @@ export const ordensServico: OrdemServico[] = [
           status: 'pendente' as const, metodo: 'link_pagamento' as const,
           paymentIntent: {
             id: 'pi01',
-            provider: 'mercado_pago' as const,
-            externalId: 'MP-CHR-00912345',
+            provider: 'prov_stone',
+            externalId: 'STN-CHR-001023',
             status: 'enviado' as const,
-            url: 'https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=00912345',
+            url: '/simulado/link-pagamento/pi01',
             geradoEm: '2025-04-11T14:35:00',
             enviadoEm: '2025-04-11T14:40:00',
             valor: 1200.00,

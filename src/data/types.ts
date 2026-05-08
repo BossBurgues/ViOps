@@ -35,6 +35,13 @@ export interface Rede {
   cnpj: string;
 }
 
+// ---------------------------------------------------------------------------
+// Unit type — distinguishes optical stores from the production/factory hub.
+// Optional field (defaults to 'otica') for backward compat with existing data.
+// ---------------------------------------------------------------------------
+
+export type TipoUnidade = 'otica' | 'central_fabrica';
+
 export interface Unidade {
   id: string;
   redeId: string;
@@ -43,7 +50,26 @@ export interface Unidade {
   uf: string;
   telefone: string;
   ativa: boolean;
+  /**
+   * Defaults to 'otica' when absent.
+   * 'central_fabrica' marks the production/factory hub unit.
+   * There should be at most one 'central_fabrica' per rede.
+   */
+  tipo?: TipoUnidade;
 }
+
+// ---------------------------------------------------------------------------
+// Operational channel — the channel through which a sale was executed.
+// Derived from origemVenda + unidade.tipo but stored explicitly on the OS
+// so that downstream reports, filters and dashboards don't need to re-derive.
+// ---------------------------------------------------------------------------
+
+/**
+ * 'loja'    — Sale executed at the optical store (presential atendimento).
+ * 'externa' — Field/external sale executed by the Central/Fábrica team.
+ * 'central' — Internal production/admin order originating at the central hub.
+ */
+export type CanalOperacional = 'loja' | 'externa' | 'central';
 
 // ---------------------------------------------------------------------------
 // Customer
@@ -124,12 +150,17 @@ export type BoletoStatus =
   | 'cancelado';
 
 /**
- * Represents a payment link, QR code, or Mercado Pago charge.
+ * Represents a payment link, QR code, or gateway charge.
  * Optional on Pagamento — only present when a link/QR charge was created.
  */
 export interface PaymentIntent {
   id: string;
-  provider: 'mercado_pago' | 'pix_manual' | 'outro';
+  /**
+   * Provider identifier — use `prov_*` IDs from ProvedorFinanceiro when possible.
+   * e.g. 'prov_stone', 'prov_sicoob', 'prov_manual'.
+   * Kept as `string` for pluggability — not coupled to any specific provider.
+   */
+  provider: string;
   externalId?: string;        // Provider's own charge ID
   status: PaymentIntentStatus;
   url?: string;               // Payment link URL
@@ -144,23 +175,24 @@ export interface PaymentIntent {
 /**
  * Represents a boleto bancário.
  * Optional on Pagamento — only present when a boleto was issued.
- * Fields prefixed with `sicoob` are specific to Sicoob integration.
+ * Use `banco` field to record the issuing bank name (e.g. 'Sicoob', 'Itau', 'BB').
+ * Bank-specific fields are generic enough to work with any Brazilian bank.
  */
 export interface Boleto {
   id: string;
-  banco: string;              // e.g. 'Sicoob', 'Bradesco'
+  banco: string;              // e.g. 'Sicoob', 'Itau', 'Banco do Brasil'
   externalId?: string;        // Bank's own boleto ID
-  /** Sicoob: nosso número (bank's reference for this boleto) */
+  /** Nosso número — reference assigned by the bank for this boleto */
   nossoNumero?: string;
-  /** Sicoob: código do caixa/agência */
+  /** Código de agência */
   agencia?: string;
-  /** Sicoob: conta corrente da empresa */
+  /** Conta corrente do cedente (empresa) */
   contaCedente?: string;
-  /** Sicoob: nome do cedente (empresa) */
+  /** Nome do cedente (empresa emitente) */
   nomeCedente?: string;
-  /** Sicoob: nome do sacado (cliente) */
+  /** Nome do sacado (cliente) */
   nomeSacado?: string;
-  /** Sicoob: CPF/CNPJ do sacado */
+  /** CPF/CNPJ do sacado */
   cpfCnpjSacado?: string;
   codigoBarras?: string;
   linhaDigitavel?: string;
@@ -344,6 +376,33 @@ export interface AssinaturaCliente {
 }
 
 // ---------------------------------------------------------------------------
+// External Action Data — structured location info for OS externa
+// Replaces the free-text localAcaoExterna going forward.
+// localAcaoExterna is derived from this struct for backward compat.
+// ---------------------------------------------------------------------------
+
+export interface DadosAcaoExterna {
+  /** Name of the location, company, or event where the sale took place */
+  nomeLocal?: string;
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+  pontoReferencia?: string;
+  /** Person responsible at the location (not the seller) */
+  responsavelLocal?: string;
+  telefoneContato?: string;
+  /** Seller or external team who performed the sale */
+  vendedorEquipe?: string;
+  /** ISO date of the field action */
+  dataAcao?: string;
+  observacoesAcao?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Ordem de Serviço — Core Entity
 // ---------------------------------------------------------------------------
 
@@ -366,13 +425,25 @@ export interface OrdemServico {
    * Defaults to 'otica' for existing records without this field.
    */
   origemVenda: OrigemVenda;
+  /**
+   * Operational channel — derived at creation time from origemVenda + unit type.
+   * Stored explicitly to avoid re-derivation in dashboards/reports/filters.
+   * Optional for backward compat with existing records.
+   */
+  canalOperacional?: CanalOperacional;
   /** Present when origemVenda === 'externa' and customer signature was captured */
   assinaturaCliente?: AssinaturaCliente;
   /**
    * For external sales: where the sale took place.
+   * Derived from dadosAcaoExterna when the structured form is used.
    * e.g. "Empresa Alfa Ltda", "Residência do cliente", "Evento SESC"
    */
   localAcaoExterna?: string;
+  /**
+   * Structured location/action data for external sales.
+   * Replaces localAcaoExterna as the primary source for new OS externa records.
+   */
+  dadosAcaoExterna?: DadosAcaoExterna;
 
   // Workflow
   status: OSStatus;
@@ -383,6 +454,11 @@ export interface OrdemServico {
   // Seller
   vendedorId: string;
   vendedorNome: string;
+  /**
+   * For external sales: the field seller or external team name.
+   * Distinct from vendedorNome when the responsible is an external agent.
+   */
+  vendedorExternoNome?: string;
 
   // Value
   valorTotal: number;
@@ -437,6 +513,17 @@ export const OS_STATUS_LABELS: Record<OSStatus, string> = {
 export const ORIGEM_VENDA_LABELS: Record<OrigemVenda, string> = {
   otica: 'Venda na Ótica',
   externa: 'Venda Externa',
+};
+
+export const TIPO_UNIDADE_LABELS: Record<TipoUnidade, string> = {
+  otica: 'Ótica',
+  central_fabrica: 'Central / Fábrica',
+};
+
+export const CANAL_OPERACIONAL_LABELS: Record<CanalOperacional, string> = {
+  loja:    'Loja',
+  externa: 'Externa (Central)',
+  central: 'Central',
 };
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {

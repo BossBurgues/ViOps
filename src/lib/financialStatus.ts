@@ -6,18 +6,46 @@
 
 import { Parcela, ParcelaStatus, Pagamento, FinancialStatus, PaymentIntentStatus, BoletoStatus, Boleto } from '@/data/types';
 import { TODAY_ISO } from '@/lib/utils';
-import type { OrigemVenda } from '@/data/types';
+import type { OrigemVenda, CanalOperacional } from '@/data/types';
 
 // ---------------------------------------------------------------------------
-// Origin-of-sale helpers (centralised to avoid duplication across pages)
+// Origin / Channel helpers — centralised to avoid duplication across pages.
+// Always prefer canalOperacional (explicit) over origemVenda (legacy).
 // ---------------------------------------------------------------------------
 
 /**
  * Returns true when an OS origin is the store (ótica).
  * Handles undefined for backward-compat with legacy mock data.
+ * Prefer isCanalLoja() when canalOperacional is available.
  */
 export function isOrigemOtica(origem: OrigemVenda | undefined): boolean {
   return !origem || origem === 'otica';
+}
+
+/**
+ * Returns true when an OS was sold through a store (presential atendimento).
+ * Uses canalOperacional when available; falls back to origemVenda.
+ * This is the preferred helper for dashboard/report canal segmentation.
+ */
+export function isCanalLoja(
+  canalOperacional: CanalOperacional | undefined,
+  origemVenda: OrigemVenda | undefined,
+): boolean {
+  if (canalOperacional) return canalOperacional === 'loja';
+  return isOrigemOtica(origemVenda);
+}
+
+/**
+ * Returns true when an OS was sold through the Central/Fábrica external channel.
+ * External sales ALWAYS belong to the Central — never to individual óticas.
+ * Uses canalOperacional when available; falls back to origemVenda.
+ */
+export function isCanalExterno(
+  canalOperacional: CanalOperacional | undefined,
+  origemVenda: OrigemVenda | undefined,
+): boolean {
+  if (canalOperacional) return canalOperacional === 'externa';
+  return origemVenda === 'externa';
 }
 
 // ---------------------------------------------------------------------------

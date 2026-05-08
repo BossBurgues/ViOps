@@ -60,9 +60,9 @@ export function useApp() {
 }
 
 export const availableProfiles: { user: AppUser; label: string }[] = [
-  { user: { id: 'usr1', nome: 'Ricardo Almeida', email: 'ricardo@viops.com', role: 'admin', unidadeId: 'u1' }, label: 'Administrador' },
-  { user: { id: 'usr2', nome: 'Carla Mendes', email: 'carla@viops.com', role: 'gestor', unidadeId: 'u1' }, label: 'Gestor de Unidade' },
-  { user: { id: 'usr3', nome: 'Fernando Costa', email: 'fernando@viops.com', role: 'vendedor', unidadeId: 'u1' }, label: 'Vendedor/Atendente' },
-  { user: { id: 'usr5', nome: 'Marcos Silva', email: 'marcos@viops.com', role: 'operador', unidadeId: 'u1' }, label: 'Operador Central' },
-  { user: { id: 'usr6', nome: 'Patricia Nunes', email: 'patricia@viops.com', role: 'financeiro', unidadeId: 'u1' }, label: 'Financeiro' },
+  { user: { id: 'usr1', nome: 'Ricardo Almeida', email: 'ricardo@viops.com', role: 'admin',      unidadeId: 'u1' }, label: 'Administrador (Centro)' },
+  { user: { id: 'usr2', nome: 'Carla Mendes',    email: 'carla@viops.com',   role: 'gestor',     unidadeId: 'u1' }, label: 'Gestor de Unidade (Centro)' },
+  { user: { id: 'usr3', nome: 'Fernando Costa',  email: 'fernando@viops.com',role: 'vendedor',   unidadeId: 'u1' }, label: 'Vendedor/Atendente (Centro)' },
+  { user: { id: 'usr5', nome: 'Marcos Silva',    email: 'marcos@viops.com',  role: 'operador',   unidadeId: 'u0' }, label: 'Operador Central (Central/Fábrica)' },
+  { user: { id: 'usr6', nome: 'Patricia Nunes',  email: 'patricia@viops.com',role: 'financeiro', unidadeId: 'u0' }, label: 'Financeiro Central (Central/Fábrica)' },
 ];

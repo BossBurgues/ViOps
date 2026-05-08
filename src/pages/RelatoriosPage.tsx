@@ -4,7 +4,7 @@ import { KpiCard } from '@/components/KpiCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ordensServico, formatCurrency, formatDate, unidades, clientes } from '@/data/mockData';
 import { useApp } from '@/contexts/AppContext';
-import { isParcelaVencida, isOrigemOtica } from '@/lib/financialStatus';
+import { isParcelaVencida, isOrigemOtica, isCanalLoja, isCanalExterno } from '@/lib/financialStatus';
 import { BarChart3, TrendingUp, Users, FileText, Shield, Timer, Truck, AlertTriangle, DollarSign, Download, FileSpreadsheet, FileDown, Lock, Info, Store, MapPin, Link2 } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
 import { Link } from 'react-router-dom';
@@ -65,8 +65,8 @@ function buildClientRows() {
     const pendentes = parcelas.filter(p => p.status === 'pendente');
     const vencidas = pendentes.filter(p => isParcelaVencida(p));
     const primeiraVencida = [...vencidas].sort((a, b) => a.vencimento.localeCompare(b.vencimento))[0];
-    const osOtica = osCliente.filter(os => isOrigemOtica(os.origemVenda)).length;
-    const osExterna = osCliente.filter(os => !isOrigemOtica(os.origemVenda)).length;
+    const osOtica    = osCliente.filter(os => isCanalLoja(os.canalOperacional, os.origemVenda)).length;
+    const osExterna  = osCliente.filter(os => isCanalExterno(os.canalOperacional, os.origemVenda)).length;
 
     return {
       nome: c.nome,
@@ -220,9 +220,9 @@ export default function RelatoriosPage() {
   const vencidas = allParcelas.filter(p => isParcelaVencida(p));
   const inadRate = allParcelas.length > 0 ? ((vencidas.length / allParcelas.length) * 100).toFixed(1) : '0';
 
-  // Origin breakdown for Geral tab
-  const osOtica = relevantOS.filter(os => isOrigemOtica(os.origemVenda)).length;
-  const osExterna = relevantOS.filter(os => !isOrigemOtica(os.origemVenda)).length;
+  // Canal breakdown for Geral tab — uses explicit canalOperacional with fallback
+  const osOtica   = relevantOS.filter(os => isCanalLoja(os.canalOperacional, os.origemVenda)).length;
+  const osExterna = relevantOS.filter(os => isCanalExterno(os.canalOperacional, os.origemVenda)).length;
   const boletosAtivos = relevantOS.flatMap(os =>
     (os.pagamento?.parcelas || []).filter(p => p.boleto && ['emitido','enviado','pendente'].includes(p.boleto.status))
   ).length;
@@ -230,7 +230,9 @@ export default function RelatoriosPage() {
     (os.pagamento?.parcelas || []).filter(p => p.paymentIntent && ['gerado','enviado','pendente'].includes(p.paymentIntent.status))
   ).length;
 
-  const porUnidade = unidades.filter(u => u.ativa).map(u => ({
+  // Por unidade: somente óticas — a Central/Fábrica tem canal próprio (externa)
+  // External sales from the central are tracked separately via osExterna.
+  const porUnidade = unidades.filter(u => u.ativa && u.tipo !== 'central_fabrica').map(u => ({
     ...u,
     os: relevantOS.filter(os => os.unidadeId === u.id).length,
     faturamento: relevantOS.filter(os => os.unidadeId === u.id).reduce((s, os) => s + os.valorTotal, 0),

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { useApp } from '@/contexts/AppContext';
 import { clientes, unidades, formatCurrency } from '@/data/mockData';
-import { OrigemVenda } from '@/data/types';
+import { OrigemVenda, CanalOperacional } from '@/data/types';
 import { OSOrigemBadge } from '@/components/OSOrigemBadge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,34 @@ import {
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { OSDocUpload, type OSDocumento, type DocCategoria } from '@/components/OSDocumentos';
+
+// ---------------------------------------------------------------------------
+// Local form type — all string fields for controlled inputs.
+// Mirrors DadosAcaoExterna from types.ts but uses string for all inputs.
+// ---------------------------------------------------------------------------
+
+interface DadosAcaoExternaForm {
+  nomeLocal: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  pontoReferencia: string;
+  responsavelLocal: string;
+  telefoneContato: string;
+  vendedorEquipe: string;
+  dataAcao: string;
+  observacoesAcao: string;
+}
+
+const DADOS_ACAO_EXTERNA_EMPTY: DadosAcaoExternaForm = {
+  nomeLocal: '', cep: '', logradouro: '', numero: '', complemento: '',
+  bairro: '', cidade: '', uf: '', pontoReferencia: '',
+  responsavelLocal: '', telefoneContato: '', vendedorEquipe: '', dataAcao: '', observacoesAcao: '',
+};
 
 type Step = 'cliente' | 'itens' | 'tecnico' | 'documentos' | 'pagamento' | 'revisao';
 
@@ -50,7 +78,16 @@ export default function NovaOSPage() {
   const [unidadeId, setUnidadeId] = useState(currentUser.unidadeId);
   const [prioridade, setPrioridade] = useState('normal');
   const [observacoes, setObservacoes] = useState('');
-  const [localAcaoExterna, setLocalAcaoExterna] = useState('');
+  // External address — structured form replacing the old single-field localAcaoExterna
+  const [dadosAcaoExterna, setDadosAcaoExterna] = useState<DadosAcaoExternaForm>(DADOS_ACAO_EXTERNA_EMPTY);
+
+  // Derived: the operational channel and responsible unit
+  // External sales are ALWAYS assigned to the Central/Fábrica — derived by tipo, never by hardcoded ID.
+  const unidadeCentral = unidades.find(u => u.tipo === 'central_fabrica');
+  const canalOperacional: CanalOperacional = origemVenda === 'externa' ? 'externa' : 'loja';
+
+  // Derived backward-compat field from structured data
+  const localAcaoExternaDerived = [dadosAcaoExterna.nomeLocal, dadosAcaoExterna.cidade && dadosAcaoExterna.uf ? `${dadosAcaoExterna.cidade}/${dadosAcaoExterna.uf}` : (dadosAcaoExterna.cidade || dadosAcaoExterna.uf)].filter(Boolean).join(' — ');
 
   // Items
   const [itens, setItens] = useState<ItemOS[]>([
@@ -70,9 +107,15 @@ export default function NovaOSPage() {
   // Documents
   const [documentos, setDocumentos] = useState<OSDocumento[]>([]);
 
-  // Payment
-  const [formaPagamento, setFormaPagamento] = useState('');
-  const [parcelas, setParcelas] = useState('1');
+  // Payment state — hybrid model: entrada + saldo complementar
+  const [valorEntrada, setValorEntrada] = useState('');
+  const [metodoEntrada, setMetodoEntrada] = useState('');
+  const [statusEntrada, setStatusEntrada] = useState('paga');
+  const [metodoComplementar, setMetodoComplementar] = useState('sem_saldo');
+  const [numParcelas, setNumParcelas] = useState('1');
+  const [vencimentoPrimeiraParcela, setVencimentoPrimeiraParcela] = useState('');
+  const [statusCobranca, setStatusCobranca] = useState('pendente');
+  const [referenciaComprovante, setReferenciaComprovante] = useState('');
 
   if (!hasPermission(['admin', 'gestor', 'vendedor'])) {
     return (
@@ -106,9 +149,24 @@ export default function NovaOSPage() {
   const stepIndex = STEPS.findIndex(s => s.key === step);
 
   const canAdvance = () => {
-    if (step === 'cliente') return !!clienteId && !!unidadeId;
+    if (step === 'cliente') {
+      if (!clienteId) return false;
+      if (origemVenda === 'otica') return !!unidadeId;
+      // Externa: require nomeLocal + cidade + uf + (vendedorEquipe or responsavelLocal)
+      const d = dadosAcaoExterna;
+      return !!d.nomeLocal.trim() && !!d.cidade.trim() && !!d.uf.trim() &&
+        (!!d.vendedorEquipe.trim() || !!d.responsavelLocal.trim());
+    }
     if (step === 'itens') return itens.length > 0 && itens.every(i => i.descricao && i.valorUnitario > 0);
-    if (step === 'pagamento') return !!formaPagamento;
+    if (step === 'pagamento') {
+      const entrada = parseFloat(valorEntrada) || 0;
+      const saldo = Math.max(0, totalItens - entrada);
+      // entrada informada exige método
+      if (entrada > 0 && !metodoEntrada) return false;
+      // existe saldo → método complementar obrigatório
+      if (saldo > 0 && metodoComplementar === 'sem_saldo') return false;
+      return true;
+    }
     return true;
   };
 
@@ -130,8 +188,13 @@ export default function NovaOSPage() {
   };
 
   const handleSubmit = () => {
+    const entrada = parseFloat(valorEntrada) || 0;
+    const temSaldo = metodoComplementar !== 'sem_saldo' && Math.max(0, totalItens - entrada) > 0;
+    const descPgto = entrada > 0
+      ? `Entrada ${metodoEntrada}${temSaldo ? ` + saldo ${metodoComplementar}` : ' (quitado)'}`
+      : `Integral via ${metodoComplementar}`;
     toast.success('Ordem de Serviço criada com sucesso', {
-      description: `OS ${origemVenda === 'externa' ? 'externa' : 'em ótica'} criada por ${currentUser.nome} para ${selectedCliente?.nome} com ${documentos.length} documento(s)`,
+      description: `OS ${origemVenda === 'externa' ? 'externa' : 'em ótica'} criada por ${currentUser.nome} para ${selectedCliente?.nome} — ${descPgto}`,
     });
     navigate('/ordens');
   };
@@ -187,11 +250,28 @@ export default function NovaOSPage() {
 
               {/* Origem da venda — seleção proeminente */}
               <div className="grid gap-3 sm:grid-cols-2">
-                {([['otica', 'Venda na Ótica', 'Atendimento presencial na loja', Store] as const, ['externa', 'Venda Externa', 'Campo, empresa, visita ou evento', MapPin] as const]).map(([key, label, desc, Icon]) => (
+                {([['otica', 'Venda na Ótica', 'Atendimento presencial na loja', Store] as const, ['externa', 'Venda Externa (Central)', 'Venda de campo pela equipe externa da Central', MapPin] as const]).map(([key, label, desc, Icon]) => (
                   <button
                     key={key}
                     type="button"
-                    onClick={() => { setOrigemVenda(key); if (key === 'otica') setLocalAcaoExterna(''); }}
+                    onClick={() => {
+                      if (key === 'externa') {
+                        if (!unidadeCentral) {
+                          toast.error('Central/Fábrica não encontrada', {
+                            description: 'Cadastre uma unidade do tipo Central/Fábrica antes de criar uma venda externa.',
+                          });
+                          return;
+                        }
+                        // Auto-assign to Central/Fábrica — derived by tipo, never by hardcoded ID
+                        setUnidadeId(unidadeCentral.id);
+                        setDadosAcaoExterna(DADOS_ACAO_EXTERNA_EMPTY);
+                      } else {
+                        // Revert to the user's home unit when switching back to ótica
+                        setUnidadeId(currentUser.unidadeId);
+                        setDadosAcaoExterna(DADOS_ACAO_EXTERNA_EMPTY);
+                      }
+                      setOrigemVenda(key);
+                    }}
                     className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-all ${
                       origemVenda === key
                         ? key === 'externa'
@@ -219,19 +299,78 @@ export default function NovaOSPage() {
                 ))}
               </div>
 
-              {/* Campos condicionais — venda externa */}
+              {/* Campos condicionais — venda externa: formulário estruturado */}
               {origemVenda === 'externa' && (
                 <div className="rounded-xl border border-violet-200 bg-violet-50/50 dark:border-violet-900/40 dark:bg-violet-950/20 p-4 space-y-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-violet-600 dark:text-violet-400">Dados da Ação Externa</p>
-                  <div>
-                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Local da Ação</label>
-                    <Input
-                      placeholder="Ex: Empresa Alfa Ltda, Residência do cliente, Evento SESC..."
-                      value={localAcaoExterna}
-                      onChange={(e) => setLocalAcaoExterna(e.target.value)}
-                    />
-                    <p className="text-[11px] text-muted-foreground mt-1">Onde ocorreu o atendimento externo</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-violet-600 dark:text-violet-400">Dados da Ação Externa — Central/Fábrica</p>
+
+                  {/* Unit info-box */}
+                  <div className="rounded-lg border border-violet-300/60 bg-violet-100/40 dark:bg-violet-950/30 px-3 py-2.5 flex items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                    <div>
+                      <p className="text-[11px] font-semibold text-violet-700 dark:text-violet-300">Unidade responsável: {unidadeCentral?.nome ?? 'Central / Fábrica'}</p>
+                      <p className="text-[10px] text-violet-600/70 dark:text-violet-400/60">A venda externa pertence exclusivamente à Central — não a nenhuma ótica</p>
+                    </div>
                   </div>
+
+                  {/* Grid de campos estruturados */}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Nome do Local / Empresa / Evento <span className="text-destructive">*</span></label>
+                      <Input placeholder="Ex: Empresa Alfa Ltda, Evento SESC, Residência do cliente..." value={dadosAcaoExterna.nomeLocal} onChange={e => setDadosAcaoExterna(d => ({ ...d, nomeLocal: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Cidade <span className="text-destructive">*</span></label>
+                      <Input placeholder="Curitiba" value={dadosAcaoExterna.cidade} onChange={e => setDadosAcaoExterna(d => ({ ...d, cidade: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">UF <span className="text-destructive">*</span></label>
+                      <Input placeholder="PR" maxLength={2} className="uppercase" value={dadosAcaoExterna.uf} onChange={e => setDadosAcaoExterna(d => ({ ...d, uf: e.target.value.toUpperCase() }))} />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Vendedor / Equipe Externa <span className="text-destructive">*</span></label>
+                      <Input placeholder="Nome do vendedor ou equipe responsável..." value={dadosAcaoExterna.vendedorEquipe} onChange={e => setDadosAcaoExterna(d => ({ ...d, vendedorEquipe: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Responsável no Local</label>
+                      <Input placeholder="Ex: Gerente RH, Portaria..." value={dadosAcaoExterna.responsavelLocal} onChange={e => setDadosAcaoExterna(d => ({ ...d, responsavelLocal: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">CEP</label>
+                      <Input placeholder="00000-000" value={dadosAcaoExterna.cep} onChange={e => setDadosAcaoExterna(d => ({ ...d, cep: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Logradouro</label>
+                      <div className="flex gap-2">
+                        <Input className="flex-1" placeholder="Rua, Av, Trav..." value={dadosAcaoExterna.logradouro} onChange={e => setDadosAcaoExterna(d => ({ ...d, logradouro: e.target.value }))} />
+                        <Input className="w-24" placeholder="Nº" value={dadosAcaoExterna.numero} onChange={e => setDadosAcaoExterna(d => ({ ...d, numero: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Bairro</label>
+                      <Input placeholder="Bairro" value={dadosAcaoExterna.bairro} onChange={e => setDadosAcaoExterna(d => ({ ...d, bairro: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Telefone de Contato</label>
+                      <Input placeholder="(41) 99999-0000" value={dadosAcaoExterna.telefoneContato} onChange={e => setDadosAcaoExterna(d => ({ ...d, telefoneContato: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Data da Ação</label>
+                      <Input type="date" value={dadosAcaoExterna.dataAcao} onChange={e => setDadosAcaoExterna(d => ({ ...d, dataAcao: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Ponto de Referência</label>
+                      <Input placeholder="Ex: próx. ao banco, portaria B..." value={dadosAcaoExterna.pontoReferencia} onChange={e => setDadosAcaoExterna(d => ({ ...d, pontoReferencia: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Observações da Ação</label>
+                      <Textarea rows={2} placeholder="Contexto, particularidades da visita externa..." value={dadosAcaoExterna.observacoesAcao} onChange={e => setDadosAcaoExterna(d => ({ ...d, observacoesAcao: e.target.value }))} />
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-violet-600/60 dark:text-violet-400/50 italic">
+                    Campos marcados com <span className="text-destructive">*</span> são obrigatórios para avançar.
+                  </p>
                 </div>
               )}
 
@@ -277,30 +416,19 @@ export default function NovaOSPage() {
                   )}
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                {origemVenda === 'otica' && (
                   <div>
-                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Unidade de Origem</label>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Unidade de Atendimento</label>
                     <Select value={unidadeId} onValueChange={setUnidadeId}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {unidades.filter(u => u.ativa).map(u => (
+                        {unidades.filter(u => u.ativa && u.tipo !== 'central_fabrica').map(u => (
                           <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Prioridade</label>
-                    <Select value={prioridade} onValueChange={setPrioridade}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="normal">Normal</SelectItem>
-                        <SelectItem value="alta">Alta</SelectItem>
-                        <SelectItem value="urgente">Urgente</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -447,52 +575,207 @@ export default function NovaOSPage() {
           {/* STEP: Pagamento */}
           {step === 'pagamento' && (
             <div className="space-y-6">
-              <h2 className="text-sm font-semibold text-foreground">Condicao de Pagamento</h2>
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Condição de Pagamento</h2>
+                <p className="text-[12px] text-muted-foreground mt-0.5">Configure a cobrança híbrida: entrada + método complementar.</p>
+              </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Forma de Pagamento</label>
-                  <Select value={formaPagamento} onValueChange={setFormaPagamento}>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pix">PIX</SelectItem>
-                      <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                      <SelectItem value="cartao_credito">Cartao de Credito</SelectItem>
-                      <SelectItem value="cartao_debito">Cartao de Debito</SelectItem>
-                      <SelectItem value="boleto">Boleto Bancario</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {/* Resumo do valor total */}
+              <div className="flex items-center justify-between rounded-lg bg-primary/5 border border-primary/15 px-4 py-3">
+                <span className="text-[12px] text-muted-foreground">Valor Total da OS</span>
+                <span className="text-base font-bold text-foreground">{formatCurrency(totalItens)}</span>
+              </div>
+
+              {/* ── Seção 1: Entrada ── */}
+              <div className="space-y-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">1. Entrada</p>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Valor da Entrada (R$)</label>
+                    <Input
+                      type="number" min={0} step={0.01}
+                      placeholder="0,00"
+                      value={valorEntrada}
+                      onChange={e => setValorEntrada(e.target.value)}
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">0 = sem entrada (saldo integral)</p>
+                  </div>
+
+                  <div>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Método da Entrada <span className="text-destructive">*</span></label>
+                    <Select value={metodoEntrada} onValueChange={setMetodoEntrada}>
+                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                        <SelectItem value="pix">Pix</SelectItem>
+                        <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
+                        <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                        <SelectItem value="maquininha">Maquininha (Adquirente)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Status da Entrada</label>
+                    <Select value={statusEntrada} onValueChange={setStatusEntrada}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="paga">Paga</SelectItem>
+                        <SelectItem value="pendente">Pendente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+
+                {/* Saldo auto-calculado */}
+                {(() => {
+                  const entrada = parseFloat(valorEntrada) || 0;
+                  const saldo = totalItens - entrada;
+                  return (
+                    <div className={`flex items-center justify-between rounded-md px-3 py-2.5 ${
+                      saldo < 0 ? 'bg-destructive/10 border border-destructive/30' : 'bg-muted/60 border border-border'
+                    }`}>
+                      <span className="text-[12px] text-muted-foreground">Saldo Restante</span>
+                      <span className={`text-sm font-bold ${
+                        saldo < 0 ? 'text-destructive' : saldo === 0 ? 'text-success' : 'text-foreground'
+                      }`}>
+                        {formatCurrency(Math.max(0, saldo))}
+                        {saldo < 0 && <span className="ml-2 text-[10px] font-normal">(entrada maior que o total)</span>}
+                        {saldo === 0 && entrada > 0 && <span className="ml-2 text-[10px] font-normal text-success">✔ Quitado na entrada</span>}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* ── Seção 2: Método Complementar ── */}
+              <div className="space-y-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">2. Saldo / Método Complementar</p>
+
                 <div>
-                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Parcelas</label>
-                  <Select value={parcelas} onValueChange={setParcelas}>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Método para o Saldo</label>
+                  <Select value={metodoComplementar} onValueChange={setMetodoComplementar}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {[1,2,3,4,5,6,7,8,9,10,12].map(n => (
-                        <SelectItem key={n} value={String(n)}>
-                          {n}x de {formatCurrency(totalItens / n)}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="sem_saldo">Sem saldo (entrada única / quitado)</SelectItem>
+                      <SelectItem value="boleto">Boleto Bancário</SelectItem>
+                      <SelectItem value="pix">Pix</SelectItem>
+                      <SelectItem value="cartao">Cartão (crédito ou débito)</SelectItem>
+                      <SelectItem value="link_pagamento">Link de Pagamento</SelectItem>
+                      <SelectItem value="qr_code">QR de Pagamento (Pix/Gateway)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Campos condicionais — aparecem somente quando há saldo */}
+                {metodoComplementar !== 'sem_saldo' && (
+                  <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div>
+                        <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Parcelas do Saldo</label>
+                        <Select value={numParcelas} onValueChange={setNumParcelas}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {[1,2,3,4,5,6,7,8,9,10,12].map(n => {
+                              const saldo = Math.max(0, totalItens - (parseFloat(valorEntrada) || 0));
+                              return (
+                                <SelectItem key={n} value={String(n)}>
+                                  {n}x {n > 1 ? `de ${formatCurrency(saldo / n)}` : '(integral)'}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Vencimento 1ª Parcela</label>
+                        <Input
+                          type="date"
+                          value={vencimentoPrimeiraParcela}
+                          onChange={e => setVencimentoPrimeiraParcela(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Status da Cobrança</label>
+                        <Select value={statusCobranca} onValueChange={setStatusCobranca}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="gerada">Gerada</SelectItem>
+                            <SelectItem value="enviada">Enviada ao cliente</SelectItem>
+                            <SelectItem value="pendente">Pendente</SelectItem>
+                            <SelectItem value="paga">Paga</SelectItem>
+                            <SelectItem value="vencida">Vencida</SelectItem>
+                            <SelectItem value="expirada">Expirada</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Info contextual por método */}
+                    {metodoComplementar === 'boleto' && (
+                      <div className="flex items-start gap-2 rounded-md bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-900/40 px-3 py-2">
+                        <span className="text-[11px] text-sky-700 dark:text-sky-300">
+                          🏦 Boleto Bancário — a emissão e o provedor serão registrados manualmente após a criação da OS.
+                        </span>
+                      </div>
+                    )}
+                    {(metodoComplementar === 'link_pagamento' || metodoComplementar === 'qr_code') && (
+                      <div className="flex items-start gap-2 rounded-md bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-900/40 px-3 py-2">
+                        <span className="text-[11px] text-violet-700 dark:text-violet-300">
+                          🔗 Link / QR de Pagamento — o link ou QR será gerado via o provedor configurado após a criação da OS.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div className="rounded-lg bg-muted/50 p-4 space-y-2">
-                <div className="flex justify-between text-[13px]">
-                  <span className="text-muted-foreground">Valor Total</span>
-                  <span className="font-bold text-foreground">{formatCurrency(totalItens)}</span>
-                </div>
-                <div className="flex justify-between text-[13px]">
-                  <span className="text-muted-foreground">Forma</span>
-                  <span className="font-medium text-foreground">{formaPagamento || '-'}</span>
-                </div>
-                <div className="flex justify-between text-[13px]">
-                  <span className="text-muted-foreground">Parcelas</span>
-                  <span className="font-medium text-foreground">{parcelas}x de {formatCurrency(totalItens / parseInt(parcelas))}</span>
-                </div>
+              {/* ── Seção 3: Comprovante ── */}
+              <div className="space-y-3">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">3. Comprovante / Referência</p>
+                <Input
+                  placeholder="Nº do comprovante, referência do Pix, código de pagamento..."
+                  value={referenciaComprovante}
+                  onChange={e => setReferenciaComprovante(e.target.value)}
+                />
+                <p className="text-[11px] text-muted-foreground">Opcional. Anote a referência do pagamento da entrada para rastreabilidade.</p>
               </div>
+
+              {/* Resumo vivo */}
+              {(metodoEntrada || (parseFloat(valorEntrada) === 0)) && (
+                <div className="rounded-lg border border-border divide-y divide-border/50">
+                  <div className="px-4 py-2.5 flex justify-between text-[12px]">
+                    {parseFloat(valorEntrada) > 0 ? (
+                      <>
+                        <span className="text-muted-foreground">Entrada ({metodoEntrada})</span>
+                        <span className={`font-semibold ${statusEntrada === 'paga' ? 'text-success' : 'text-warning'}`}>
+                          {formatCurrency(parseFloat(valorEntrada) || 0)} — {statusEntrada}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-muted-foreground">Entrada</span>
+                        <span className="font-medium text-muted-foreground">Sem entrada</span>
+                      </>
+                    )}
+                  </div>
+                  {metodoComplementar !== 'sem_saldo' && (
+                    <div className="px-4 py-2.5 flex justify-between text-[12px]">
+                      <span className="text-muted-foreground">Saldo ({metodoComplementar}) {numParcelas}x</span>
+                      <span className="font-semibold text-foreground">
+                        {formatCurrency(Math.max(0, totalItens - (parseFloat(valorEntrada) || 0)))}
+                      </span>
+                    </div>
+                  )}
+                  <div className="px-4 py-2.5 flex justify-between text-[13px]">
+                    <span className="font-bold text-foreground">Total</span>
+                    <span className="font-bold text-foreground">{formatCurrency(totalItens)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -502,20 +785,57 @@ export default function NovaOSPage() {
               <h2 className="text-sm font-semibold text-foreground">Revisão Final</h2>
               <p className="text-[12px] text-muted-foreground -mt-4">Confira todos os dados antes de criar a Ordem de Serviço.</p>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-lg border border-border p-4 space-y-2">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Origem da Venda</p>
-                  <OSOrigemBadge origem={origemVenda} localAcao={localAcaoExterna || undefined} size="md" />
-                  {origemVenda === 'externa' && !localAcaoExterna && (
-                    <p className="text-[11px] text-warning">Local da ação não informado</p>
-                  )}
+              <div className="rounded-lg border border-border divide-y divide-border/60">
+                <div className="px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">Contexto da Venda</p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[12px]">
+                    <div>
+                      <span className="text-muted-foreground">Tipo: </span>
+                      <span className="font-medium text-foreground">{origemVenda === 'externa' ? 'Venda Externa' : 'Venda na Ótica'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Canal: </span>
+                      <span className="font-medium text-foreground capitalize">{canalOperacional}</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Unidade responsável: </span>
+                      <span className={`font-medium ${origemVenda === 'externa' ? 'text-violet-600 dark:text-violet-400' : 'text-foreground'}`}>
+                        {origemVenda === 'externa'
+                          ? (unidadeCentral?.nome ?? 'Central / Fábrica')
+                          : unidades.find(u => u.id === unidadeId)?.nome ?? '-'
+                        }
+                      </span>
+                    </div>
+                    {localAcaoExternaDerived && (
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Local da ação: </span>
+                        <span className="font-medium text-foreground">{localAcaoExternaDerived}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="rounded-lg border border-border p-4 space-y-2">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Vendedor</p>
-                  <p className="text-sm font-medium text-foreground">{currentUser.nome}</p>
-                  <p className="text-[12px] text-muted-foreground">{selectedUnidade?.nome || '-'}</p>
+
+              {/* Painel estruturado da Ação Externa — exibido apenas na revisão quando externa */}
+              {origemVenda === 'externa' && dadosAcaoExterna.nomeLocal && (
+                <div className="rounded-xl border border-violet-200 dark:border-violet-800/40 bg-violet-50/40 dark:bg-violet-950/10 p-4 space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400">Dados da Ação Externa</p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[12px]">
+                    {dadosAcaoExterna.nomeLocal && <div className="col-span-2"><span className="text-muted-foreground">Local: </span><span className="font-medium text-foreground">{dadosAcaoExterna.nomeLocal}</span></div>}
+                    {dadosAcaoExterna.vendedorEquipe && <div><span className="text-muted-foreground">Equipe/Vendedor: </span><span className="font-medium text-foreground">{dadosAcaoExterna.vendedorEquipe}</span></div>}
+                    {dadosAcaoExterna.responsavelLocal && <div><span className="text-muted-foreground">Resp. local: </span><span className="font-medium text-foreground">{dadosAcaoExterna.responsavelLocal}</span></div>}
+                    {(dadosAcaoExterna.cidade || dadosAcaoExterna.uf) && <div><span className="text-muted-foreground">Cidade/UF: </span><span className="font-medium text-foreground">{dadosAcaoExterna.cidade}{dadosAcaoExterna.uf ? `/${dadosAcaoExterna.uf}` : ''}</span></div>}
+                    {dadosAcaoExterna.logradouro && <div><span className="text-muted-foreground">Endereço: </span><span className="font-medium text-foreground">{dadosAcaoExterna.logradouro}{dadosAcaoExterna.numero ? `, ${dadosAcaoExterna.numero}` : ''}</span></div>}
+                    {dadosAcaoExterna.bairro && <div><span className="text-muted-foreground">Bairro: </span><span className="font-medium text-foreground">{dadosAcaoExterna.bairro}</span></div>}
+                    {dadosAcaoExterna.cep && <div><span className="text-muted-foreground">CEP: </span><span className="font-medium text-foreground">{dadosAcaoExterna.cep}</span></div>}
+                    {dadosAcaoExterna.telefoneContato && <div><span className="text-muted-foreground">Tel. contato: </span><span className="font-medium text-foreground">{dadosAcaoExterna.telefoneContato}</span></div>}
+                    {dadosAcaoExterna.dataAcao && <div><span className="text-muted-foreground">Data da ação: </span><span className="font-medium text-foreground">{dadosAcaoExterna.dataAcao}</span></div>}
+                    {dadosAcaoExterna.pontoReferencia && <div className="col-span-2"><span className="text-muted-foreground">Referência: </span><span className="font-medium text-foreground">{dadosAcaoExterna.pontoReferencia}</span></div>}
+                    {dadosAcaoExterna.observacoesAcao && <div className="col-span-2"><span className="text-muted-foreground">Observações: </span><span className="font-medium text-foreground">{dadosAcaoExterna.observacoesAcao}</span></div>}
+                  </div>
                 </div>
+              )}
               </div>
+
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-lg border border-border p-4 space-y-2">
@@ -581,9 +901,65 @@ export default function NovaOSPage() {
                 )}
               </div>
 
-              <div className="rounded-lg border border-border p-4 space-y-2">
-                <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Pagamento</p>
-                <p className="text-sm font-medium text-foreground">{formaPagamento || '-'} — {parcelas}x de {formatCurrency(totalItens / parseInt(parcelas))}</p>
+              {/* Pagamento summary */}
+              <div className="rounded-lg border border-border divide-y divide-border/60">
+                <div className="px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">Pagamento</p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[12px]">
+                    <div>
+                      <span className="text-muted-foreground">Total: </span>
+                      <span className="font-bold text-foreground">{formatCurrency(totalItens)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Entrada: </span>
+                      <span className="font-medium text-foreground">{formatCurrency(parseFloat(valorEntrada) || 0)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Método entrada: </span>
+                      <span className="font-medium text-foreground capitalize">{metodoEntrada || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Status entrada: </span>
+                      <span className={`font-medium ${statusEntrada === 'paga' ? 'text-success' : 'text-warning'}`}>
+                        {statusEntrada}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Saldo restante: </span>
+                      <span className="font-medium text-foreground">
+                        {formatCurrency(Math.max(0, totalItens - (parseFloat(valorEntrada) || 0)))}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Método saldo: </span>
+                      <span className="font-medium text-foreground">
+                        {metodoComplementar === 'sem_saldo' ? 'Quitado' : metodoComplementar}
+                      </span>
+                    </div>
+                    {metodoComplementar !== 'sem_saldo' && (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground">Parcelas: </span>
+                          <span className="font-medium text-foreground">{numParcelas}x</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">1ª parcela: </span>
+                          <span className="font-medium text-foreground">{vencimentoPrimeiraParcela || '-'}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground">Status cobrança: </span>
+                          <span className="font-medium text-foreground capitalize">{statusCobranca}</span>
+                        </div>
+                      </>
+                    )}
+                    {referenciaComprovante && (
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Comprovante: </span>
+                        <span className="font-medium text-foreground font-mono text-[11px]">{referenciaComprovante}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {observacoes && (
@@ -633,7 +1009,7 @@ export default function NovaOSPage() {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Confirmar Criação da OS"
-        description={`Criar OS para ${selectedCliente?.nome || 'cliente'} no valor de ${formatCurrency(totalItens)} com ${documentos.length} documento(s)? A OS será criada com status Aberta e poderá ser enviada à Central em seguida.`}
+        description={`Criar OS de ${origemVenda === 'externa' ? 'venda externa (Central/Fábrica)' : 'venda na ótica'} para ${selectedCliente?.nome || 'cliente'} no valor de ${formatCurrency(totalItens)} com ${documentos.length} documento(s)? A OS será criada com status Aberta.`}
         confirmLabel="Criar OS"
         onConfirm={handleSubmit}
       />

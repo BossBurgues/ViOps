@@ -10,13 +10,58 @@ import {
   TIPO_MOVIMENTACAO_LABELS, getMovimentacaoClass, formatMovimentacaoQtd,
   CATEGORIA_LABELS,
 } from '@/lib/estoqueStatus';
-import { formatDate } from '@/data/mockData';
+import { formatDate, unidades } from '@/data/mockData';
+import type { ItemEstoque, MovimentacaoEstoque, TipoMovimentacao, CategoriaEstoque } from '@/data/stockTypes';
 import {
   Package, AlertTriangle, Shield, Search, ChevronRight, Layers,
-  ArrowUpCircle, ArrowDownCircle, ToggleLeft, History, Filter,
+  ArrowUpCircle, ArrowDownCircle, ToggleLeft, History, Plus, X,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
+
+// ---------------------------------------------------------------------------
+// Local form state types — strongly typed, no `any`
+// ---------------------------------------------------------------------------
+
+interface NovoItemForm {
+  nome: string;
+  descricao: string;
+  categoria: CategoriaEstoque;
+  marca: string;
+  referencia: string;
+  unidadeId: string;
+  saldoInicial: string;
+  estoqueMinimo: string;
+  precoCusto: string;
+  precoVenda: string;
+  ativo: boolean;
+}
+
+interface NovaMovimentacaoForm {
+  itemId: string;
+  tipo: TipoMovimentacao;
+  quantidade: string;
+  osVinculadaId: string;
+  osVinculadaNumero: string;
+  observacao: string;
+}
+
+const ITEM_FORM_EMPTY: NovoItemForm = {
+  nome: '', descricao: '', categoria: 'armacao', marca: '', referencia: '',
+  unidadeId: '', saldoInicial: '0', estoqueMinimo: '1',
+  precoCusto: '', precoVenda: '', ativo: true,
+};
+
+const MOV_FORM_EMPTY: NovaMovimentacaoForm = {
+  itemId: '', tipo: 'entrada', quantidade: '1',
+  osVinculadaId: '', osVinculadaNumero: '', observacao: '',
+};
 
 type EstoqueView = 'itens' | 'movimentacoes';
 type AlertaFilter = 'todos' | 'zerado' | 'baixo' | 'ok';
@@ -27,6 +72,82 @@ export default function EstoquePage() {
   const [search, setSearch] = useState('');
   const [alertaFilter, setAlertaFilter] = useState<AlertaFilter>('todos');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+
+  // Session-local state — initialized from mock data
+  const [itens, setItens] = useState<ItemEstoque[]>(itensEstoque);
+  const [movimentacoes, setMovimentacoes] = useState<MovimentacaoEstoque[]>(movimentacoesEstoque);
+
+  // Modal state
+  const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [movModalOpen, setMovModalOpen] = useState(false);
+  const [itemForm, setItemForm] = useState<NovoItemForm>({ ...ITEM_FORM_EMPTY, unidadeId: currentUser.unidadeId });
+  const [movForm, setMovForm] = useState<NovaMovimentacaoForm>({ ...MOV_FORM_EMPTY });
+
+  const canManageStock = hasPermission(['admin', 'gestor']);
+  const canRegisterMov = hasPermission(['admin', 'gestor', 'operador']);
+
+  // Handlers
+  const handleSalvarItem = () => {
+    if (!itemForm.nome.trim() || !itemForm.unidadeId) {
+      toast.error('Preencha nome e unidade.');
+      return;
+    }
+    const novoItem: ItemEstoque = {
+      id: `sku-${Date.now()}`,
+      unidadeId: itemForm.unidadeId,
+      nome: itemForm.nome.trim(),
+      descricao: itemForm.descricao || undefined,
+      categoria: itemForm.categoria,
+      marca: itemForm.marca || undefined,
+      referencia: itemForm.referencia || undefined,
+      saldoAtual: parseFloat(itemForm.saldoInicial) || 0,
+      estoqueMinimo: parseFloat(itemForm.estoqueMinimo) || 1,
+      precoCusto: itemForm.precoCusto ? parseFloat(itemForm.precoCusto) : undefined,
+      precoVenda: itemForm.precoVenda ? parseFloat(itemForm.precoVenda) : undefined,
+      ativo: itemForm.ativo,
+      criadoEm: new Date().toISOString(),
+    };
+    setItens(prev => [...prev, novoItem]);
+    setItemForm({ ...ITEM_FORM_EMPTY, unidadeId: currentUser.unidadeId });
+    setItemModalOpen(false);
+    toast.success('Item cadastrado com sucesso.');
+  };
+
+  const handleSalvarMovimentacao = () => {
+    if (!movForm.itemId || !movForm.tipo || !movForm.quantidade) {
+      toast.error('Preencha item, tipo e quantidade.');
+      return;
+    }
+    const qtd = parseFloat(movForm.quantidade);
+    if (isNaN(qtd) || qtd <= 0) { toast.error('Quantidade inválida.'); return; }
+    const itemAlvo = itens.find(i => i.id === movForm.itemId);
+    if (!itemAlvo) return;
+
+    const novaMov: MovimentacaoEstoque = {
+      id: `mov-${Date.now()}`,
+      itemId: movForm.itemId,
+      unidadeId: itemAlvo.unidadeId,
+      tipo: movForm.tipo,
+      quantidade: qtd,
+      osId: movForm.osVinculadaId || undefined,
+      osNumero: movForm.osVinculadaNumero || undefined,
+      usuarioId: currentUser.id,
+      usuarioNome: currentUser.nome,
+      observacao: movForm.observacao || undefined,
+      dataMovimentacao: new Date().toISOString(),
+    };
+
+    // Update local saldo
+    const positivos: TipoMovimentacao[] = ['entrada', 'ajuste_positivo', 'devolucao'];
+    const delta = positivos.includes(movForm.tipo) ? qtd : -qtd;
+    setItens(prev => prev.map(i =>
+      i.id === movForm.itemId ? { ...i, saldoAtual: Math.max(0, i.saldoAtual + delta) } : i
+    ));
+    setMovimentacoes(prev => [novaMov, ...prev]);
+    setMovForm({ ...MOV_FORM_EMPTY });
+    setMovModalOpen(false);
+    toast.success(`Movimentação registrada — ${TIPO_MOVIMENTACAO_LABELS[movForm.tipo]}`);
+  };
 
   // --- Module gate: if disabled, show friendly "module off" screen ---
   if (!estoqueConfig.habilitado) {
@@ -57,12 +178,12 @@ export default function EstoquePage() {
     );
   }
 
-  // --- Data scoping by unit ---
-  const relevantItens = itensEstoque.filter(i =>
+  // --- Data scoping by unit (uses session-local state) ---
+  const relevantItens = itens.filter(i =>
     i.ativo &&
     (selectedUnidadeId === 'todas' || i.unidadeId === selectedUnidadeId)
   );
-  const relevantMovs = movimentacoesEstoque.filter(m =>
+  const relevantMovs = movimentacoes.filter(m =>
     selectedUnidadeId === 'todas' || m.unidadeId === selectedUnidadeId
   );
 
@@ -88,6 +209,9 @@ export default function EstoquePage() {
     ? getMovimentacoesDoItem(selectedItemId, relevantMovs)
     : [];
 
+  // Items available for movimentação modal
+  const itensAtivos = itens.filter(i => i.ativo);
+
   // --- Recent movements (all items) ---
   const recentMovs = [...relevantMovs]
     .sort((a, b) => b.dataMovimentacao.localeCompare(a.dataMovimentacao))
@@ -97,7 +221,7 @@ export default function EstoquePage() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
               <Package className="h-5 w-5 text-muted-foreground" />
@@ -110,10 +234,27 @@ export default function EstoquePage() {
               )}
             </p>
           </div>
-          {/* Module state badge */}
-          <div className="flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1.5 text-[11px] font-semibold text-success">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            Módulo ativo
+          <div className="flex items-center gap-2">
+            {canRegisterMov && (
+              <Button
+                variant="outline" size="sm" className="h-9 text-[13px]"
+                onClick={() => { setMovForm({ ...MOV_FORM_EMPTY }); setMovModalOpen(true); }}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />Registrar Movimentação
+              </Button>
+            )}
+            {canManageStock && (
+              <Button
+                size="sm" className="h-9 text-[13px] font-semibold"
+                onClick={() => { setItemForm({ ...ITEM_FORM_EMPTY, unidadeId: currentUser.unidadeId }); setItemModalOpen(true); }}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />Cadastrar Item
+              </Button>
+            )}
+            <div className="flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1.5 text-[11px] font-semibold text-success">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" />
+              Módulo ativo
+            </div>
           </div>
         </div>
 
@@ -441,6 +582,176 @@ export default function EstoquePage() {
           </div>
         </div>
       </div>
+
+      {/* ── Modal: Cadastrar Item ─────────────────────────────────────── */}
+      {itemModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-background rounded-2xl border border-border shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-sm font-bold text-foreground">Cadastrar Item de Estoque</h2>
+              <button onClick={() => setItemModalOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Nome / Descrição <span className="text-destructive">*</span></label>
+                  <Input placeholder="Ex: Armação Ray-Ban RB5228" value={itemForm.nome} onChange={e => setItemForm(f => ({ ...f, nome: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Categoria <span className="text-destructive">*</span></label>
+                  <Select value={itemForm.categoria} onValueChange={v => setItemForm(f => ({ ...f, categoria: v as CategoriaEstoque }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(Object.entries(CATEGORIA_LABELS) as [CategoriaEstoque, string][]).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Unidade <span className="text-destructive">*</span></label>
+                  <Select value={itemForm.unidadeId} onValueChange={v => setItemForm(f => ({ ...f, unidadeId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectContent>
+                      {unidades.filter(u => u.ativa).map(u => (
+                        <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Marca</label>
+                  <Input placeholder="Ex: Ray-Ban" value={itemForm.marca} onChange={e => setItemForm(f => ({ ...f, marca: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">SKU / Referência</label>
+                  <Input placeholder="Ex: RB5228-BLK" value={itemForm.referencia} onChange={e => setItemForm(f => ({ ...f, referencia: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Saldo Inicial</label>
+                  <Input type="number" min={0} value={itemForm.saldoInicial} onChange={e => setItemForm(f => ({ ...f, saldoInicial: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Estoque Mínimo</label>
+                  <Input type="number" min={0} value={itemForm.estoqueMinimo} onChange={e => setItemForm(f => ({ ...f, estoqueMinimo: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Custo Unitário (R$)</label>
+                  <Input type="number" min={0} step={0.01} placeholder="0,00" value={itemForm.precoCusto} onChange={e => setItemForm(f => ({ ...f, precoCusto: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Preço de Venda (R$)</label>
+                  <Input type="number" min={0} step={0.01} placeholder="0,00" value={itemForm.precoVenda} onChange={e => setItemForm(f => ({ ...f, precoVenda: e.target.value }))} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Observações / Fornecedor</label>
+                  <Textarea rows={2} placeholder="Informações adicionais, fornecedor, lote..." value={itemForm.descricao} onChange={e => setItemForm(f => ({ ...f, descricao: e.target.value }))} />
+                </div>
+                <div className="sm:col-span-2 flex items-center gap-2">
+                  <input type="checkbox" id="ativo-item" checked={itemForm.ativo} onChange={e => setItemForm(f => ({ ...f, ativo: e.target.checked }))} className="accent-primary" />
+                  <label htmlFor="ativo-item" className="text-[12px] font-medium text-muted-foreground">Item ativo (visível no estoque)</label>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
+              <Button variant="outline" size="sm" onClick={() => setItemModalOpen(false)}>Cancelar</Button>
+              <Button size="sm" className="font-semibold" onClick={handleSalvarItem}>Cadastrar Item</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Registrar Movimentação ────────────────────────────── */}
+      {movModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-background rounded-2xl border border-border shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-sm font-bold text-foreground">Registrar Movimentação</h2>
+              <button onClick={() => setMovModalOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Item <span className="text-destructive">*</span></label>
+                <Select value={movForm.itemId} onValueChange={v => setMovForm(f => ({ ...f, itemId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o item..." /></SelectTrigger>
+                  <SelectContent>
+                    {itensAtivos.map(i => (
+                      <SelectItem key={i.id} value={i.id}>{i.nome}{i.marca ? ` — ${i.marca}` : ''} (saldo: {i.saldoAtual})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Tipo <span className="text-destructive">*</span></label>
+                  <Select value={movForm.tipo} onValueChange={v => setMovForm(f => ({ ...f, tipo: v as TipoMovimentacao }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(Object.entries(TIPO_MOVIMENTACAO_LABELS) as [TipoMovimentacao, string][])
+                        // 'transferencia' oculta até existência de unidade de destino
+                        .filter(([k]) => k !== 'transferencia')
+                        .map(([k, v]) => (
+                          <SelectItem key={k} value={k}>{v}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Quantidade <span className="text-destructive">*</span></label>
+                  <Input type="number" min={1} value={movForm.quantidade} onChange={e => setMovForm(f => ({ ...f, quantidade: e.target.value }))} />
+                </div>
+              </div>
+              {movForm.tipo === 'baixa_os' && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">ID da OS</label>
+                    <Input placeholder="os1" value={movForm.osVinculadaId} onChange={e => setMovForm(f => ({ ...f, osVinculadaId: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Nº da OS</label>
+                    <Input placeholder="OS-2025-0001" value={movForm.osVinculadaNumero} onChange={e => setMovForm(f => ({ ...f, osVinculadaNumero: e.target.value }))} />
+                  </div>
+                </div>
+              )}
+              {/* Aviso de origem do estoque para baixas de OS externa */}
+              {movForm.tipo === 'baixa_os' && (() => {
+                const item = itensAtivos.find(i => i.id === movForm.itemId);
+                const isCentral = item?.unidadeId === 'u0';
+                return (
+                  <div className={`rounded-md px-3 py-2.5 text-[11px] flex items-start gap-2 ${
+                    isCentral
+                      ? 'bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800/40 text-violet-700 dark:text-violet-300'
+                      : 'bg-muted/50 text-muted-foreground'
+                  }`}>
+                    <span className="mt-0.5 shrink-0">{isCentral ? '🏭' : 'ℹ️'}</span>
+                    <span>
+                      {isCentral
+                        ? 'Origem do estoque: Central/Fábrica — movimentações de OS externas saem do estoque da Central.'
+                        : 'Para OS externas, o item consumido deve pertencer ao estoque da Central/Fábrica.'}
+                    </span>
+                  </div>
+                );
+              })()}
+              <div>
+                <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Observação</label>
+                <Textarea rows={2} placeholder="Motivo da movimentação, NF, referência..." value={movForm.observacao} onChange={e => setMovForm(f => ({ ...f, observacao: e.target.value }))} />
+              </div>
+              <div className="rounded-md bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground">
+                Usuário: <span className="font-medium text-foreground">{currentUser.nome}</span> · Data/hora: <span className="font-medium text-foreground">{new Date().toLocaleString('pt-BR')}</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
+              <Button variant="outline" size="sm" onClick={() => setMovModalOpen(false)}>Cancelar</Button>
+              <Button size="sm" className="font-semibold" onClick={handleSalvarMovimentacao}>Registrar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </AppLayout>
   );
 }
