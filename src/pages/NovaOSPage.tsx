@@ -41,6 +41,12 @@ interface DadosAcaoExternaForm {
   observacoesAcao: string;
 }
 
+const DADOS_ACAO_EXTERNA_EMPTY: DadosAcaoExternaForm = {
+  nomeLocal: '', cep: '', logradouro: '', numero: '', complemento: '',
+  bairro: '', cidade: '', uf: '', pontoReferencia: '',
+  responsavelLocal: '', telefoneContato: '', vendedorEquipe: '', dataAcao: '', observacoesAcao: '',
+};
+
 type Step = 'cliente' | 'itens' | 'tecnico' | 'documentos' | 'pagamento' | 'revisao';
 
 const STEPS: { key: Step; label: string; icon: React.ElementType }[] = [
@@ -73,11 +79,7 @@ export default function NovaOSPage() {
   const [prioridade, setPrioridade] = useState('normal');
   const [observacoes, setObservacoes] = useState('');
   // External address — structured form replacing the old single-field localAcaoExterna
-  const [dadosAcaoExterna, setDadosAcaoExterna] = useState<DadosAcaoExternaForm>({
-    nomeLocal: '', cep: '', logradouro: '', numero: '', complemento: '',
-    bairro: '', cidade: '', uf: '', pontoReferencia: '',
-    responsavelLocal: '', telefoneContato: '', vendedorEquipe: '', dataAcao: '', observacoesAcao: '',
-  });
+  const [dadosAcaoExterna, setDadosAcaoExterna] = useState<DadosAcaoExternaForm>(DADOS_ACAO_EXTERNA_EMPTY);
 
   // Derived: the operational channel and responsible unit
   // External sales are ALWAYS assigned to the Central/Fábrica — derived by tipo, never by hardcoded ID.
@@ -253,16 +255,22 @@ export default function NovaOSPage() {
                     key={key}
                     type="button"
                     onClick={() => {
-                      setOrigemVenda(key);
                       if (key === 'externa') {
-                        // Auto-assign to Central/Fábrica — external sales never belong to an ótica
-                        setUnidadeId(CENTRAL_ID);
-                        setLocalAcaoExterna('');
+                        if (!unidadeCentral) {
+                          toast.error('Central/Fábrica não encontrada', {
+                            description: 'Cadastre uma unidade do tipo Central/Fábrica antes de criar uma venda externa.',
+                          });
+                          return;
+                        }
+                        // Auto-assign to Central/Fábrica — derived by tipo, never by hardcoded ID
+                        setUnidadeId(unidadeCentral.id);
+                        setDadosAcaoExterna(DADOS_ACAO_EXTERNA_EMPTY);
                       } else {
                         // Revert to the user's home unit when switching back to ótica
                         setUnidadeId(currentUser.unidadeId);
-                        setLocalAcaoExterna('');
+                        setDadosAcaoExterna(DADOS_ACAO_EXTERNA_EMPTY);
                       }
+                      setOrigemVenda(key);
                     }}
                     className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-all ${
                       origemVenda === key
