@@ -150,12 +150,17 @@ export type BoletoStatus =
   | 'cancelado';
 
 /**
- * Represents a payment link, QR code, or Mercado Pago charge.
+ * Represents a payment link, QR code, or gateway charge.
  * Optional on Pagamento — only present when a link/QR charge was created.
  */
 export interface PaymentIntent {
   id: string;
-  provider: 'mercado_pago' | 'pix_manual' | 'outro';
+  /**
+   * Provider identifier — use `prov_*` IDs from ProvedorFinanceiro when possible.
+   * e.g. 'prov_stone', 'prov_sicoob', 'prov_manual'.
+   * Kept as `string` for pluggability — not coupled to any specific provider.
+   */
+  provider: string;
   externalId?: string;        // Provider's own charge ID
   status: PaymentIntentStatus;
   url?: string;               // Payment link URL
@@ -170,23 +175,24 @@ export interface PaymentIntent {
 /**
  * Represents a boleto bancário.
  * Optional on Pagamento — only present when a boleto was issued.
- * Fields prefixed with `sicoob` are specific to Sicoob integration.
+ * Use `banco` field to record the issuing bank name (e.g. 'Sicoob', 'Itau', 'BB').
+ * Bank-specific fields are generic enough to work with any Brazilian bank.
  */
 export interface Boleto {
   id: string;
-  banco: string;              // e.g. 'Sicoob', 'Bradesco'
+  banco: string;              // e.g. 'Sicoob', 'Itau', 'Banco do Brasil'
   externalId?: string;        // Bank's own boleto ID
-  /** Sicoob: nosso número (bank's reference for this boleto) */
+  /** Nosso número — reference assigned by the bank for this boleto */
   nossoNumero?: string;
-  /** Sicoob: código do caixa/agência */
+  /** Código de agência */
   agencia?: string;
-  /** Sicoob: conta corrente da empresa */
+  /** Conta corrente do cedente (empresa) */
   contaCedente?: string;
-  /** Sicoob: nome do cedente (empresa) */
+  /** Nome do cedente (empresa emitente) */
   nomeCedente?: string;
-  /** Sicoob: nome do sacado (cliente) */
+  /** Nome do sacado (cliente) */
   nomeSacado?: string;
-  /** Sicoob: CPF/CNPJ do sacado */
+  /** CPF/CNPJ do sacado */
   cpfCnpjSacado?: string;
   codigoBarras?: string;
   linhaDigitavel?: string;

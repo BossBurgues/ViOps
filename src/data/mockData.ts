@@ -311,14 +311,14 @@ export const ordensServico: OrdemServico[] = [
     ],
     pagamento: {
       id: 'p9', osId: 'os9',
-      formaPagamento: 'Entrada Dinheiro + Boleto Sicoob',
+      formaPagamento: 'Entrada Dinheiro + Boleto Bancário',
       metodo: 'dinheiro' as const,
       valorTotal: 2400.00,
       valorEntrada: 900.00,
       metodoPagamentoComplementar: 'boleto' as const,
-      metodoPagamentoComplementarLabel: 'Boleto Sicoob',
+      metodoPagamentoComplementarLabel: 'Boleto Bancário',
       valorComplementar: 1500.00,
-      observacoes: 'Entrada R$ 900,00 paga na visita. Saldo R$ 1.500,00 em boleto Sicoob a vencer em 30 dias da entrega.',
+      observacoes: 'Entrada R$ 900,00 paga na visita. Saldo R$ 1.500,00 em boleto bancário a vencer em 30 dias da entrega.',
       parcelas: [
         {
           id: 'pc29', numero: 1, valor: 900.00, vencimento: '2025-04-08',
@@ -368,14 +368,14 @@ export const ordensServico: OrdemServico[] = [
     ],
     pagamento: {
       id: 'p10', osId: 'os10',
-      formaPagamento: 'Entrada Pix + Link Mercado Pago',
+      formaPagamento: 'Entrada Pix + Link de Pagamento',
       metodo: 'pix' as const,
       valorTotal: 1750.00,
       valorEntrada: 550.00,
       metodoPagamentoComplementar: 'link_pagamento' as const,
-      metodoPagamentoComplementarLabel: 'Link Mercado Pago',
+      metodoPagamentoComplementarLabel: 'Link de Pagamento',
       valorComplementar: 1200.00,
-      observacoes: 'Entrada R$ 550,00 via Pix confirmada. Link de R$ 1.200,00 enviado pelo WhatsApp. Aguardando pagamento.',
+      observacoes: 'Entrada R$ 550,00 via Pix confirmada. Link de pagamento de R$ 1.200,00 enviado pelo WhatsApp. Aguardando pagamento.',
       parcelas: [
         {
           id: 'pc31', numero: 1, valor: 550.00, vencimento: '2025-04-11',
@@ -386,10 +386,10 @@ export const ordensServico: OrdemServico[] = [
           status: 'pendente' as const, metodo: 'link_pagamento' as const,
           paymentIntent: {
             id: 'pi01',
-            provider: 'mercado_pago' as const,
-            externalId: 'MP-CHR-00912345',
+            provider: 'prov_stone',
+            externalId: 'STN-CHR-001023',
             status: 'enviado' as const,
-            url: 'https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=00912345',
+            url: '/simulado/link-pagamento/pi01',
             geradoEm: '2025-04-11T14:35:00',
             enviadoEm: '2025-04-11T14:40:00',
             valor: 1200.00,

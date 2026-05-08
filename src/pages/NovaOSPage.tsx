@@ -156,7 +156,15 @@ export default function NovaOSPage() {
         (!!d.vendedorEquipe.trim() || !!d.responsavelLocal.trim());
     }
     if (step === 'itens') return itens.length > 0 && itens.every(i => i.descricao && i.valorUnitario > 0);
-    if (step === 'pagamento') return !!metodoEntrada;
+    if (step === 'pagamento') {
+      const entrada = parseFloat(valorEntrada) || 0;
+      const saldo = Math.max(0, totalItens - entrada);
+      // entrada informada exige método
+      if (entrada > 0 && !metodoEntrada) return false;
+      // existe saldo → método complementar obrigatório
+      if (saldo > 0 && metodoComplementar === 'sem_saldo') return false;
+      return true;
+    }
     return true;
   };
 
@@ -178,10 +186,11 @@ export default function NovaOSPage() {
   };
 
   const handleSubmit = () => {
-    const temSaldo = metodoComplementar !== 'sem_saldo';
-    const descPgto = temSaldo
-      ? `Entrada ${metodoEntrada} + saldo ${metodoComplementar}`
-      : metodoEntrada;
+    const entrada = parseFloat(valorEntrada) || 0;
+    const temSaldo = metodoComplementar !== 'sem_saldo' && Math.max(0, totalItens - entrada) > 0;
+    const descPgto = entrada > 0
+      ? `Entrada ${metodoEntrada}${temSaldo ? ` + saldo ${metodoComplementar}` : ' (quitado)'}`
+      : `Integral via ${metodoComplementar}`;
     toast.success('Ordem de Serviço criada com sucesso', {
       description: `OS ${origemVenda === 'externa' ? 'externa' : 'em ótica'} criada por ${currentUser.nome} para ${selectedCliente?.nome} — ${descPgto}`,
     });
@@ -594,7 +603,7 @@ export default function NovaOSPage() {
                         <SelectItem value="pix">Pix</SelectItem>
                         <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
                         <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
-                        <SelectItem value="maquina_mp">Mercado Pago Máquina</SelectItem>
+                        <SelectItem value="maquininha">Maquininha (Adquirente)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -642,11 +651,11 @@ export default function NovaOSPage() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="sem_saldo">Sem saldo (entrada única / quitado)</SelectItem>
-                      <SelectItem value="boleto">Boleto Sicoob</SelectItem>
+                      <SelectItem value="boleto">Boleto Bancário</SelectItem>
                       <SelectItem value="pix">Pix</SelectItem>
                       <SelectItem value="cartao">Cartão (crédito ou débito)</SelectItem>
-                      <SelectItem value="link_pagamento">Link Mercado Pago</SelectItem>
-                      <SelectItem value="qr_mercado_pago">QR Code Mercado Pago</SelectItem>
+                      <SelectItem value="link_pagamento">Link de Pagamento</SelectItem>
+                      <SelectItem value="qr_code">QR de Pagamento (Pix/Gateway)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -701,14 +710,14 @@ export default function NovaOSPage() {
                     {metodoComplementar === 'boleto' && (
                       <div className="flex items-start gap-2 rounded-md bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-900/40 px-3 py-2">
                         <span className="text-[11px] text-sky-700 dark:text-sky-300">
-                          🏦 Boleto Sicoob — a emissão será registrada manualmente após criação da OS.
+                          🏦 Boleto Bancário — a emissão e o provedor serão registrados manualmente após a criação da OS.
                         </span>
                       </div>
                     )}
-                    {(metodoComplementar === 'link_pagamento' || metodoComplementar === 'qr_mercado_pago') && (
+                    {(metodoComplementar === 'link_pagamento' || metodoComplementar === 'qr_code') && (
                       <div className="flex items-start gap-2 rounded-md bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-900/40 px-3 py-2">
                         <span className="text-[11px] text-violet-700 dark:text-violet-300">
-                          🔗 Link / QR Mercado Pago — o link será gerado e enviado ao cliente após criação da OS. Não é cobrança automática.
+                          🔗 Link / QR de Pagamento — o link ou QR será gerado via o provedor configurado após a criação da OS.
                         </span>
                       </div>
                     )}
@@ -728,13 +737,22 @@ export default function NovaOSPage() {
               </div>
 
               {/* Resumo vivo */}
-              {metodoEntrada && (
+              {(metodoEntrada || (parseFloat(valorEntrada) === 0)) && (
                 <div className="rounded-lg border border-border divide-y divide-border/50">
                   <div className="px-4 py-2.5 flex justify-between text-[12px]">
-                    <span className="text-muted-foreground">Entrada ({metodoEntrada})</span>
-                    <span className={`font-semibold ${statusEntrada === 'paga' ? 'text-success' : 'text-warning'}`}>
-                      {formatCurrency(parseFloat(valorEntrada) || 0)} — {statusEntrada}
-                    </span>
+                    {parseFloat(valorEntrada) > 0 ? (
+                      <>
+                        <span className="text-muted-foreground">Entrada ({metodoEntrada})</span>
+                        <span className={`font-semibold ${statusEntrada === 'paga' ? 'text-success' : 'text-warning'}`}>
+                          {formatCurrency(parseFloat(valorEntrada) || 0)} — {statusEntrada}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-muted-foreground">Entrada</span>
+                        <span className="font-medium text-muted-foreground">Sem entrada</span>
+                      </>
+                    )}
                   </div>
                   {metodoComplementar !== 'sem_saldo' && (
                     <div className="px-4 py-2.5 flex justify-between text-[12px]">

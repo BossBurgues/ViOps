@@ -12,18 +12,26 @@ import {
   BOLETO_STATUS_LABELS, BOLETO_STATUS_CLASSES,
   PAYMENT_INTENT_STATUS_LABELS, PAYMENT_INTENT_STATUS_CLASSES,
 } from '@/lib/financialStatus';
-import { DollarSign, AlertTriangle, CheckCircle, Clock, TrendingUp, CreditCard, Search, Shield, Lock, FileDown, Users, Link2, FileText } from 'lucide-react';
+import { DollarSign, AlertTriangle, CheckCircle, Clock, TrendingUp, CreditCard, Search, Shield, Lock, FileDown, Users, Link2, FileText, Plug } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { recordAudit, buildExportFilename } from '@/lib/audit';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
+import { cobrancas as todasCobrancas } from '@/data/mockCobrancas';
+import { provedoresFinanceiros, getProvedorById } from '@/data/mockProvedores';
+import {
+  TIPO_COBRANCA_LABELS, STATUS_COBRANCA_LABELS, STATUS_COBRANCA_CLASSES,
+  type TipoCobranca, type StatusCobranca,
+} from '@/data/financeiroTypes';
 
 type FinFilter = 'todos' | 'vencidas' | 'a_vencer' | 'pagas';
-type FinView = 'parcelas' | 'boletos_links' | 'por_cliente' | 'por_unidade';
-
+type FinView = 'parcelas' | 'boletos_links' | 'por_cliente' | 'por_unidade' | 'cobranças';
 
 export default function FinanceiroPage() {
   const { selectedUnidadeId, hasPermission, currentUser } = useApp();
@@ -33,6 +41,13 @@ export default function FinanceiroPage() {
   const [page, setPage] = useState(1);
   const [confirmAction, setConfirmAction] = useState<{ title: string; desc: string; action: () => void } | null>(null);
   const canOperate = hasPermission(['admin', 'financeiro']);
+
+  // Cobranças tab filters
+  const [cobFiltroCanal, setCobFiltroCanal] = useState<'todos' | 'otica' | 'externa'>('todos');
+  const [cobFiltroTipo, setCobFiltroTipo] = useState<'todos' | TipoCobranca>('todos');
+  const [cobFiltroStatus, setCobFiltroStatus] = useState<'todos' | StatusCobranca>('todos');
+  const [cobFiltroProvedor, setCobFiltroProvedor] = useState<'todos' | string>('todos');
+  const [cobSearch, setCobSearch] = useState('');
 
   if (!hasPermission(['admin', 'gestor', 'financeiro'])) {
     return (
@@ -131,6 +146,34 @@ export default function FinanceiroPage() {
       valorVencido: upVenc.reduce((s, p) => s + p.valor, 0),
     };
   });
+
+  // ---------------------------------------------------------------------------
+  // Cobranças tab — derive canal/origem from OS, apply filters
+  // ---------------------------------------------------------------------------
+  const cobWithOs = todasCobrancas.map(c => {
+    const os = ordensServico.find(o => o.id === c.osId);
+    return { ...c, origemVenda: os?.origemVenda ?? 'otica', canalOperacional: os?.canalOperacional ?? 'loja' };
+  }).filter(c => selectedUnidadeId === 'todas' || c.unidadeId === selectedUnidadeId);
+
+  const displayCobrancas = cobWithOs
+    .filter(c => cobFiltroCanal === 'todos' || c.origemVenda === cobFiltroCanal)
+    .filter(c => cobFiltroTipo === 'todos' || c.tipo === cobFiltroTipo)
+    .filter(c => cobFiltroStatus === 'todos' || c.status === cobFiltroStatus)
+    .filter(c => cobFiltroProvedor === 'todos' || c.providerId === cobFiltroProvedor)
+    .filter(c => {
+      if (!cobSearch) return true;
+      const q = cobSearch.toLowerCase();
+      return c.osNumero.toLowerCase().includes(q) || c.clienteNome.toLowerCase().includes(q);
+    });
+
+  const cobPagas      = displayCobrancas.filter(c => c.status === 'paga');
+  const cobPendentes  = displayCobrancas.filter(c => ['pendente','gerada','emitida','enviada','rascunho'].includes(c.status));
+  const cobVencidas   = displayCobrancas.filter(c => c.status === 'vencida');
+  const cobTotal      = displayCobrancas.reduce((s, c) => s + c.valor, 0);
+  const cobRecebido   = cobPagas.reduce((s, c) => s + c.valor, 0);
+  const cobVencVal    = cobVencidas.reduce((s, c) => s + c.valor, 0);
+  const cobTicket     = displayCobrancas.length > 0 ? cobTotal / displayCobrancas.length : 0;
+  const cobPendCount  = cobPendentes.length;
 
   let displayParcelas = filter === 'vencidas' ? vencidas
     : filter === 'a_vencer' ? aVencer
@@ -281,12 +324,13 @@ export default function FinanceiroPage() {
         )}
 
         {/* View tabs */}
-        <div className="flex items-center gap-1.5 border-b border-border pb-0">
+        <div className="flex items-center gap-1.5 border-b border-border pb-0 flex-wrap">
           {([
             ['parcelas', 'Parcelas'],
             ['boletos_links', `Boletos & Links${boletosAtivos.length + linksAtivos.length > 0 ? ` (${boletosAtivos.length + linksAtivos.length})` : ''}`],
             ['por_cliente', 'Por Cliente'],
             ['por_unidade', 'Por Unidade'],
+            ['cobranças', `Cobranças${cobPendCount > 0 ? ` (${cobPendCount})` : ''}`],
           ] as const).map(([key, label]) => (
             <button
               key={key}
@@ -611,14 +655,134 @@ export default function FinanceiroPage() {
           </div>
         )}
 
+        {view === 'cobranças' && (
+          <div className="space-y-5">
+            {/* KPIs das Cobranças */}
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <KpiCard title="Total" value={cobTotal} icon={DollarSign} isCurrency />
+              <KpiCard title="Recebido" value={cobRecebido} icon={CheckCircle} isCurrency />
+              <KpiCard title="Pendente" value={cobPendentes.reduce((s,c)=>s+c.valor,0)} icon={Clock} isCurrency />
+              <KpiCard title="Vencido" value={cobVencVal} icon={AlertTriangle} isCurrency />
+              <KpiCard title="Cobranças" value={displayCobrancas.length} icon={CreditCard} />
+              <KpiCard title="Ticket Médio" value={cobTicket} icon={TrendingUp} isCurrency />
+            </div>
+
+            {/* Filtros operacionais */}
+            <div className="page-card p-4 space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Filtros</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    placeholder="OS ou cliente..."
+                    value={cobSearch}
+                    onChange={e => setCobSearch(e.target.value)}
+                    className="w-full h-9 pl-9 pr-3 rounded-md border border-input bg-background text-[12px] outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <Select value={cobFiltroCanal} onValueChange={v => setCobFiltroCanal(v as typeof cobFiltroCanal)}>
+                  <SelectTrigger className="h-9 text-[12px]"><SelectValue placeholder="Canal" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os canais</SelectItem>
+                    <SelectItem value="otica">Ótica</SelectItem>
+                    <SelectItem value="externa">Externa (Central)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={cobFiltroTipo} onValueChange={v => setCobFiltroTipo(v as typeof cobFiltroTipo)}>
+                  <SelectTrigger className="h-9 text-[12px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os tipos</SelectItem>
+                    {(Object.keys(TIPO_COBRANCA_LABELS) as (keyof typeof TIPO_COBRANCA_LABELS)[]).map(k => (
+                      <SelectItem key={k} value={k}>{TIPO_COBRANCA_LABELS[k]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={cobFiltroStatus} onValueChange={v => setCobFiltroStatus(v as typeof cobFiltroStatus)}>
+                  <SelectTrigger className="h-9 text-[12px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os status</SelectItem>
+                    {(Object.keys(STATUS_COBRANCA_LABELS) as (keyof typeof STATUS_COBRANCA_LABELS)[]).map(k => (
+                      <SelectItem key={k} value={k}>{STATUS_COBRANCA_LABELS[k]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={cobFiltroProvedor} onValueChange={setCobFiltroProvedor}>
+                  <SelectTrigger className="h-9 text-[12px]"><SelectValue placeholder="Provedor" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os provedores</SelectItem>
+                    {provedoresFinanceiros.filter(p => p.ativo).map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Tabela de Cobranças */}
+            <div className="page-card">
+              {displayCobrancas.length === 0 ? (
+                <EmptyState icon={CreditCard} title="Nenhuma cobrança encontrada" description="Ajuste os filtros ou crie cobranças vinculadas às OS." />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="table-header px-5 py-3 text-left">OS</th>
+                        <th className="table-header px-5 py-3 text-left">Cliente</th>
+                        <th className="table-header px-5 py-3 text-left">Canal</th>
+                        <th className="table-header px-5 py-3 text-left">Tipo</th>
+                        <th className="table-header px-5 py-3 text-left">Provedor</th>
+                        <th className="table-header px-5 py-3 text-left">Vencimento</th>
+                        <th className="table-header px-5 py-3 text-right">Valor</th>
+                        <th className="table-header px-5 py-3 text-left">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayCobrancas.map(c => {
+                        const prov = c.providerId ? getProvedorById(c.providerId) : undefined;
+                        const isVenc = c.status === 'vencida';
+                        return (
+                          <tr key={c.id} className={`border-b border-border/40 last:border-0 hover:bg-muted/40 ${isVenc ? 'bg-destructive/[0.02]' : ''}`}>
+                            <td className="px-5 py-3 font-medium text-primary">
+                              <Link to={`/ordens/${c.osId}`} className="hover:underline">{c.osNumero}</Link>
+                            </td>
+                            <td className="px-5 py-3 text-foreground">{c.clienteNome}</td>
+                            <td className="px-5 py-3 text-muted-foreground text-[11px]">
+                              <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold ${c.origemVenda === 'externa' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' : 'bg-muted text-muted-foreground'}`}>
+                                {c.origemVenda === 'externa' ? 'Externa' : 'Ótica'}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-[12px] text-muted-foreground">{TIPO_COBRANCA_LABELS[c.tipo]}</td>
+                            <td className="px-5 py-3 text-[12px] text-muted-foreground">{prov?.nome ?? '—'}</td>
+                            <td className={`px-5 py-3 text-[12px] ${isVenc ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                              {formatDate(c.vencimento)}
+                            </td>
+                            <td className="px-5 py-3 text-right font-medium text-foreground">{formatCurrency(c.valor)}</td>
+                            <td className="px-5 py-3">
+                              <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold ${STATUS_COBRANCA_CLASSES[c.status]}`}>
+                                {STATUS_COBRANCA_LABELS[c.status]}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="page-card px-6 py-4 flex items-center gap-3 border-dashed">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10">
-            <CreditCard className="h-4 w-4 text-sky-500" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+            <Plug className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <p className="text-[13px] font-medium text-foreground">Integração Bancária — Sicoob & Mercado Pago</p>
-            <p className="text-[12px] text-muted-foreground">Módulo preparado para conciliação automática de boletos Sicoob e confirmação de pagamentos via link/QR Mercado Pago.</p>
+            <p className="text-[13px] font-medium text-foreground">Provedores Financeiros Plugáveis</p>
+            <p className="text-[12px] text-muted-foreground">Configure bancos, gateways e adquirentes como provedores externos. Boleto, Pix, link de pagamento e QR sem acoplamento a provedor específico.</p>
           </div>
+
         </div>
       </div>
 
