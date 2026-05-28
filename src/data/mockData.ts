@@ -154,7 +154,7 @@ export const ordensServico: OrdemServico[] = [
     },
     itens: [
       { id: 'i7', descricao: 'Armacao Prada SPR 01V', tipo: 'Armacao', quantidade: 1, valorUnitario: 1400.00 },
-      { id: 'i8', descricao: 'Lentes Zeiss Individual 2', tipo: 'Lente', quantidade: 2, valorUnitario: 900.00 },
+      { id: 'i8', descricao: 'Lentes Zeiss Individual 2', tipo: 'Lente', quantidade: 2, valorUnitario: 900.00, estoqueItemId: 'sku10' },
     ],
     historico: [
       { id: 'h11', data: '2025-04-05 11:00', status: 'recebida', descricao: 'OS criada', usuario: 'Lucia Ferreira' },
@@ -246,7 +246,7 @@ export const ordensServico: OrdemServico[] = [
       ],
     },
     itens: [
-      { id: 'i13', descricao: 'Armacao Tom Ford FT5401', tipo: 'Armacao', quantidade: 1, valorUnitario: 1800.00 },
+      { id: 'i13', descricao: 'Armacao Tom Ford FT5401', tipo: 'Armacao', quantidade: 1, valorUnitario: 1800.00, estoqueItemId: 'sku11' },
       { id: 'i14', descricao: 'Armacao Dior Montaigne', tipo: 'Armacao', quantidade: 1, valorUnitario: 1200.00 },
       { id: 'i15', descricao: 'Lentes Essilor Varilux Comfort', tipo: 'Lente', quantidade: 4, valorUnitario: 375.00 },
     ],
@@ -302,7 +302,7 @@ export const ordensServico: OrdemServico[] = [
     vendedorId: 'usr4', vendedorNome: 'Juliana Ribeiro', prioridade: 'alta',
     itens: [
       { id: 'i18', descricao: 'Armação Ray-Ban RB5228', tipo: 'Armacao' as const, quantidade: 1, valorUnitario: 900.00 },
-      { id: 'i19', descricao: 'Lentes Transitions Signature Gen 8', tipo: 'Lente' as const, quantidade: 2, valorUnitario: 750.00 },
+      { id: 'i19', descricao: 'Lentes Transitions Signature Gen 8', tipo: 'Lente' as const, quantidade: 2, valorUnitario: 750.00, estoqueItemId: 'sku12' },
     ],
     historico: [
       { id: 'h21', data: '2025-04-08 10:00', status: 'recebida' as const, descricao: 'OS criada via venda externa', usuario: 'Juliana Ribeiro' },

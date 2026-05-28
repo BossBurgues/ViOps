@@ -137,7 +137,7 @@ export const movimentacoesEstoque: MovimentacaoEstoque[] = [
   // Baixa por OS externa os4 — estoque sai da Central/Fábrica (sku10)
   {
     id: 'mov06', itemId: 'sku10', unidadeId: 'u0', tipo: 'baixa_os', quantidade: 2,
-    osId: 'os4', osNumero: 'OS-2025-0004',
+    osId: 'os4', osItemId: 'i8', osNumero: 'OS-2025-0004',
     usuarioId: 'usr5', usuarioNome: 'Marcos Silva',
     observacao: 'Baixa OS externa — estoque Central/Fábrica',
     dataMovimentacao: '2025-04-06T09:00:00',
@@ -153,7 +153,7 @@ export const movimentacoesEstoque: MovimentacaoEstoque[] = [
   // Baixa por OS externa os7 — estoque sai da Central/Fábrica (sku11: Tom Ford)
   {
     id: 'mov11', itemId: 'sku11', unidadeId: 'u0', tipo: 'baixa_os', quantidade: 1,
-    osId: 'os7', osNumero: 'OS-2025-0007',
+    osId: 'os7', osItemId: 'i13', osNumero: 'OS-2025-0007',
     usuarioId: 'usr5', usuarioNome: 'Marcos Silva',
     observacao: 'Baixa OS externa — Tom Ford FT5401 — estoque Central/Fábrica',
     dataMovimentacao: '2025-04-07T15:00:00',
@@ -161,7 +161,7 @@ export const movimentacoesEstoque: MovimentacaoEstoque[] = [
   // Baixa por OS externa os9 — estoque sai da Central/Fábrica (sku12: Transitions)
   {
     id: 'mov12', itemId: 'sku12', unidadeId: 'u0', tipo: 'baixa_os', quantidade: 2,
-    osId: 'os9', osNumero: 'OS-2025-0009',
+    osId: 'os9', osItemId: 'i19', osNumero: 'OS-2025-0009',
     usuarioId: 'usr5', usuarioNome: 'Marcos Silva',
     observacao: 'Baixa OS externa — Transitions Signature Gen 8 — estoque Central/Fábrica',
     dataMovimentacao: '2025-04-09T08:30:00',
