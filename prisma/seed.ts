@@ -4,7 +4,30 @@ const prisma = new PrismaClient();
 
 const d = (value: string) => new Date(value);
 
+function assertSafeSeedEnvironment() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to run destructive seed with NODE_ENV=production.');
+  }
+
+  if (process.env.ALLOW_DESTRUCTIVE_SEED !== 'true') {
+    throw new Error('Refusing to run destructive seed. Set ALLOW_DESTRUCTIVE_SEED=true for local development.');
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required to run the seed.');
+  }
+
+  const { hostname } = new URL(databaseUrl);
+  const safeHosts = new Set(['localhost', '127.0.0.1', 'viops-postgres']);
+  if (!safeHosts.has(hostname)) {
+    throw new Error(`Refusing to run destructive seed against unsafe database host: ${hostname}.`);
+  }
+}
+
 async function main() {
+  assertSafeSeedEnvironment();
+
   await prisma.auditLog.deleteMany();
   await prisma.inventoryCountItem.deleteMany();
   await prisma.inventoryCount.deleteMany();

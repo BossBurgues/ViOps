@@ -431,6 +431,7 @@ model Charge {
   serviceOrder ServiceOrder       @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
   client       Client             @relation(fields: [clientId], references: [id])
   provider     FinancialProvider? @relation(fields: [providerId], references: [id])
+  payments     Payment[]
 
   @@index([tenantId])
   @@index([serviceOrderId])
@@ -453,6 +454,7 @@ model Payment {
   createdAt      DateTime      @default(now())
 
   serviceOrder ServiceOrder  @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  charge       Charge?       @relation(fields: [chargeId], references: [id])
   installments Installment[]
 
   @@index([serviceOrderId])

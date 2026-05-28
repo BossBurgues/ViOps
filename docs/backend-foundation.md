@@ -7,32 +7,55 @@
 - Prisma ORM para schema, migrations, client e seed.
 - Seed TypeScript via `tsx`.
 
-Nesta rodada nao foi criado `server/` nem `apps/api`. A escolha foi manter a fundacao em `prisma/` porque o frontend atual ainda nao consome API e criar um bootstrap HTTP sem endpoints reais adicionaria superficie sem entregar valor agora. A futura API pode ser adicionada em `server/` usando o Prisma Client gerado.
+Nesta rodada nao foi criado `server/` nem `apps/api`. A escolha foi manter a fundacao em `prisma/` porque o frontend atual ainda usa mocks e nao consome API. A futura API pode ser adicionada em `server/` usando o Prisma Client gerado.
 
 ## Estrutura criada
 
 - `docker-compose.yml`: PostgreSQL local com volume persistente.
-- `.env.example`: variaveis minimas para banco e futura API.
+- `.env.example`: variaveis minimas para banco, seed local e futura API.
 - `prisma/schema.prisma`: modelo inicial dos bounded contexts.
 - `prisma/seed.ts`: seed demo alinhado aos mocks atuais.
+- `prisma/migrations`: migrations locais do schema Prisma.
 - `docs/backend-foundation.md`: esta documentacao.
 
-## Como subir PostgreSQL local
+## PostgreSQL local
+
+Subir o banco:
 
 ```bash
 docker compose up -d postgres
 ```
 
-O banco local usa:
+O banco roda isolado no Compose do ViOps:
 
+- container: `viops-postgres`
 - database: `viops`
 - user: `viops_dev`
-- password: `viops_dev_password`
-- port: `5432`
+- password local: `change_me` no `.env.example`
+- porta externa: `localhost:5433`
+- porta interna do container: `5432`
+
+O uso de `5433` evita conflito com outros PostgreSQL locais, incluindo ambientes de outros projetos como FCX. A `DATABASE_URL` local deve apontar para `localhost:5433`:
+
+```bash
+DATABASE_URL="postgresql://viops_dev:change_me@localhost:5433/viops?schema=public"
+```
 
 Crie um `.env` local a partir de `.env.example`. O `.env` real nao deve ser versionado.
 
-## Comandos Prisma
+## Seed local destrutivo
+
+O seed atual limpa e recria dados demo. Ele e apenas para desenvolvimento local.
+
+Para executar, o ambiente precisa atender a todas as travas:
+
+- `ALLOW_DESTRUCTIVE_SEED=true`
+- `NODE_ENV` diferente de `production`
+- `DATABASE_URL` apontando para `localhost`, `127.0.0.1` ou `viops-postgres`
+
+Essas travas reduzem o risco de executar `deleteMany()` contra um banco que nao seja local.
+
+## Fluxo recomendado
 
 Gerar Prisma Client:
 
@@ -40,16 +63,10 @@ Gerar Prisma Client:
 npm run db:generate
 ```
 
-Criar migration local:
+Criar/aplicar migration local:
 
 ```bash
-npm run db:migrate
-```
-
-Aplicar schema sem migration, util para prototipacao local:
-
-```bash
-npm run db:push
+npx prisma migrate dev
 ```
 
 Rodar seed:
@@ -64,10 +81,10 @@ Abrir Prisma Studio:
 npm run db:studio
 ```
 
-Reset local:
+Validar o projeto:
 
 ```bash
-npm run db:reset
+npm run validate
 ```
 
 ## Decisoes de modelagem
@@ -80,6 +97,7 @@ npm run db:reset
 - `StockMovement` permite rastrear `ServiceOrder -> ServiceOrderItem -> StockItem -> StockMovement`.
 - `StockReservation` foi modelado para futura reserva, mas o frontend ainda nao usa esse fluxo.
 - Financeiro usa `FinancialProvider`, `Charge`, `Payment` e `Installment` sem acoplar o dominio a Sicoob, Mercado Pago ou qualquer provedor especifico.
+- `Payment.chargeId` e opcional no MVP, mas possui relacao real com `Charge`.
 - `AuditLog` prepara rastreabilidade por tenant, usuario, OS e recurso.
 - `StockTransfer`, `StockTransferItem`, `InventoryCount` e `InventoryCountItem` foram incluidos como modelos preparados, sem fluxo implementado.
 
@@ -96,9 +114,8 @@ npm run db:reset
 
 ## Proximos passos recomendados
 
-1. Rodar migration inicial contra PostgreSQL local e revisar o SQL gerado.
-2. Criar um `server/` minimo com health check e injetar Prisma Client.
-3. Implementar endpoints somente de leitura para `Tenant`, `Unit`, `Client` e `ServiceOrder`.
-4. Adicionar camada de aplicacao para regras de OS externa e estoque antes de endpoints de escrita.
-5. Criar testes de dominio para baixa por OS, unidade operacional e bloqueio de saldo negativo.
-6. Migrar telas gradualmente para API mantendo mocks como fallback temporario apenas durante transicao.
+1. Criar um `server/` minimo com health check e injetar Prisma Client.
+2. Implementar endpoints somente de leitura para `Tenant`, `Unit`, `Client` e `ServiceOrder`.
+3. Adicionar camada de aplicacao para regras de OS externa e estoque antes de endpoints de escrita.
+4. Criar testes de dominio para baixa por OS, unidade operacional e bloqueio de saldo negativo.
+5. Migrar telas gradualmente para API mantendo mocks como fallback temporario apenas durante transicao.
