@@ -8,9 +8,10 @@ import {
   getAlertaEstoque, calcEstoqueSummary, getMovimentacoesDoItem,
   ALERTA_ESTOQUE_LABELS, ALERTA_ESTOQUE_CLASSES, ALERTA_ESTOQUE_DOT_CLASSES,
   TIPO_MOVIMENTACAO_LABELS, getMovimentacaoClass, formatMovimentacaoQtd,
-  CATEGORIA_LABELS,
+  CATEGORIA_LABELS, getMovimentacaoDelta, getItensElegiveisParaMovimentacao,
+  getOSItemVinculadoAoEstoque, validarMovimentacaoEstoque,
 } from '@/lib/estoqueStatus';
-import { formatDate, unidades } from '@/data/mockData';
+import { formatDate, unidades, ordensServico } from '@/data/mockData';
 import type { ItemEstoque, MovimentacaoEstoque, TipoMovimentacao, CategoriaEstoque } from '@/data/stockTypes';
 import {
   Package, AlertTriangle, Shield, Search, ChevronRight, Layers,
@@ -85,6 +86,11 @@ export default function EstoquePage() {
 
   const canManageStock = hasPermission(['admin', 'gestor']);
   const canRegisterMov = hasPermission(['admin', 'gestor', 'operador']);
+  const unidadeCentral = unidades.find(u => u.tipo === 'central_fabrica');
+  const unidadeCentralId = unidadeCentral?.id ?? 'u0';
+  const selectedOS = movForm.osVinculadaId
+    ? ordensServico.find(os => os.id === movForm.osVinculadaId)
+    : undefined;
 
   // Handlers
   const handleSalvarItem = () => {
@@ -122,6 +128,20 @@ export default function EstoquePage() {
     if (isNaN(qtd) || qtd <= 0) { toast.error('Quantidade inválida.'); return; }
     const itemAlvo = itens.find(i => i.id === movForm.itemId);
     if (!itemAlvo) return;
+    const osVinculada = movForm.tipo === 'baixa_os' ? selectedOS : undefined;
+    const validacao = validarMovimentacaoEstoque({
+      item: itemAlvo,
+      tipo: movForm.tipo,
+      quantidade: qtd,
+      os: osVinculada,
+      movimentacoes,
+      unidadeCentralId,
+    });
+
+    if (!validacao.valid) {
+      toast.error(validacao.message ?? 'Movimentação inválida.');
+      return;
+    }
 
     const novaMov: MovimentacaoEstoque = {
       id: `mov-${Date.now()}`,
@@ -129,8 +149,9 @@ export default function EstoquePage() {
       unidadeId: itemAlvo.unidadeId,
       tipo: movForm.tipo,
       quantidade: qtd,
-      osId: movForm.osVinculadaId || undefined,
-      osNumero: movForm.osVinculadaNumero || undefined,
+      osId: osVinculada?.id,
+      osItemId: getOSItemVinculadoAoEstoque(osVinculada, itemAlvo.id),
+      osNumero: osVinculada?.numero,
       usuarioId: currentUser.id,
       usuarioNome: currentUser.nome,
       observacao: movForm.observacao || undefined,
@@ -138,10 +159,9 @@ export default function EstoquePage() {
     };
 
     // Update local saldo
-    const positivos: TipoMovimentacao[] = ['entrada', 'ajuste_positivo', 'devolucao'];
-    const delta = positivos.includes(movForm.tipo) ? qtd : -qtd;
+    const delta = getMovimentacaoDelta(movForm.tipo, qtd);
     setItens(prev => prev.map(i =>
-      i.id === movForm.itemId ? { ...i, saldoAtual: Math.max(0, i.saldoAtual + delta) } : i
+      i.id === movForm.itemId ? { ...i, saldoAtual: i.saldoAtual + delta } : i
     ));
     setMovimentacoes(prev => [novaMov, ...prev]);
     setMovForm({ ...MOV_FORM_EMPTY });
@@ -210,7 +230,13 @@ export default function EstoquePage() {
     : [];
 
   // Items available for movimentação modal
-  const itensAtivos = itens.filter(i => i.ativo);
+  const itensElegiveisMovimentacao = getItensElegiveisParaMovimentacao(itens, {
+    tipo: movForm.tipo,
+    selectedUnidadeId,
+    currentUserUnidadeId: currentUser.unidadeId,
+    os: selectedOS,
+    unidadeCentralId,
+  });
 
   // --- Recent movements (all items) ---
   const recentMovs = [...relevantMovs]
@@ -530,7 +556,7 @@ export default function EstoquePage() {
                   </thead>
                   <tbody>
                     {recentMovs.map(mov => {
-                      const item = itensEstoque.find(i => i.id === mov.itemId);
+                      const item = itens.find(i => i.id === mov.itemId);
                       return (
                         <tr key={mov.id} className="border-b border-border/40 last:border-0 hover:bg-muted/40">
                           <td className="px-5 py-3 text-[12px] text-muted-foreground whitespace-nowrap">
@@ -679,7 +705,7 @@ export default function EstoquePage() {
                 <Select value={movForm.itemId} onValueChange={v => setMovForm(f => ({ ...f, itemId: v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecione o item..." /></SelectTrigger>
                   <SelectContent>
-                    {itensAtivos.map(i => (
+                    {itensElegiveisMovimentacao.map(i => (
                       <SelectItem key={i.id} value={i.id}>{i.nome}{i.marca ? ` — ${i.marca}` : ''} (saldo: {i.saldoAtual})</SelectItem>
                     ))}
                   </SelectContent>
@@ -688,7 +714,7 @@ export default function EstoquePage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Tipo <span className="text-destructive">*</span></label>
-                  <Select value={movForm.tipo} onValueChange={v => setMovForm(f => ({ ...f, tipo: v as TipoMovimentacao }))}>
+                  <Select value={movForm.tipo} onValueChange={v => setMovForm(f => ({ ...f, tipo: v as TipoMovimentacao, itemId: '', osVinculadaId: '', osVinculadaNumero: '' }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {(Object.entries(TIPO_MOVIMENTACAO_LABELS) as [TipoMovimentacao, string][])
@@ -709,18 +735,38 @@ export default function EstoquePage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">ID da OS</label>
-                    <Input placeholder="os1" value={movForm.osVinculadaId} onChange={e => setMovForm(f => ({ ...f, osVinculadaId: e.target.value }))} />
+                    <Select
+                      value={movForm.osVinculadaId}
+                      onValueChange={v => {
+                        const os = ordensServico.find(o => o.id === v);
+                        setMovForm(f => ({
+                          ...f,
+                          osVinculadaId: v,
+                          osVinculadaNumero: os?.numero ?? '',
+                          itemId: '',
+                        }));
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Selecione a OS..." /></SelectTrigger>
+                      <SelectContent>
+                        {ordensServico.map(os => (
+                          <SelectItem key={os.id} value={os.id}>
+                            {os.numero} - {os.origemVenda === 'externa' ? 'Externa / Central' : os.unidadeNome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">Nº da OS</label>
-                    <Input placeholder="OS-2025-0001" value={movForm.osVinculadaNumero} onChange={e => setMovForm(f => ({ ...f, osVinculadaNumero: e.target.value }))} />
+                    <Input placeholder="OS-2025-0001" value={movForm.osVinculadaNumero} readOnly />
                   </div>
                 </div>
               )}
               {/* Aviso de origem do estoque para baixas de OS externa */}
               {movForm.tipo === 'baixa_os' && (() => {
-                const item = itensAtivos.find(i => i.id === movForm.itemId);
-                const isCentral = item?.unidadeId === 'u0';
+                const item = itens.find(i => i.id === movForm.itemId);
+                const isCentral = item?.unidadeId === unidadeCentralId;
                 return (
                   <div className={`rounded-md px-3 py-2.5 text-[11px] flex items-start gap-2 ${
                     isCentral

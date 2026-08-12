@@ -66,6 +66,8 @@ export interface MovimentacaoEstoque {
   quantidade: number;      // Always positive; tipo determines direction
   /** OS number this movement is linked to, when tipo === 'baixa_os' */
   osId?: string;
+  /** OS item line consumed by this movement, when the OS item is linked to stock */
+  osItemId?: string;
   osNumero?: string;
   /** Person who registered the movement */
   usuarioId: string;

@@ -1,5 +1,5 @@
 // =============================================================================
-// ViOps — Stock / Inventory Domain Helpers
+// ViOps - Stock / Inventory Domain Helpers
 // Pure business logic for the optional stock module.
 // Pages and components should import from here, not inline business rules.
 // =============================================================================
@@ -10,10 +10,6 @@ import { ItemEstoque, MovimentacaoEstoque, AlertaEstoque, TipoMovimentacao, Cate
 // Alert thresholds
 // ---------------------------------------------------------------------------
 
-/**
- * Returns the stock alert level for a given item.
- * 'zerado' = no stock, 'baixo' = below minimum, 'ok' = healthy.
- */
 export function getAlertaEstoque(item: ItemEstoque): AlertaEstoque {
   if (item.saldoAtual <= 0) return 'zerado';
   if (item.saldoAtual <= item.estoqueMinimo) return 'baixo';
@@ -52,10 +48,26 @@ export const TIPO_MOVIMENTACAO_LABELS: Record<TipoMovimentacao, string> = {
   transferencia: 'Transferência',
 };
 
-/** Returns +1 (increases stock) or -1 (decreases stock) for a movement type. */
+const MOVIMENTACAO_DIRECAO: Record<TipoMovimentacao, 1 | -1> = {
+  entrada: 1,
+  ajuste_positivo: 1,
+  devolucao: 1,
+  saida: -1,
+  baixa_os: -1,
+  ajuste_negativo: -1,
+  transferencia: -1,
+};
+
 export function getMovimentacaoDirecao(tipo: TipoMovimentacao): 1 | -1 {
-  const positive: TipoMovimentacao[] = ['entrada', 'ajuste_positivo', 'devolucao'];
-  return positive.includes(tipo) ? 1 : -1;
+  return MOVIMENTACAO_DIRECAO[tipo];
+}
+
+export function getMovimentacaoDelta(tipo: TipoMovimentacao, quantidade: number): number {
+  return getMovimentacaoDirecao(tipo) * quantidade;
+}
+
+export function isQuantidadeMovimentacaoValida(quantidade: number): boolean {
+  return Number.isFinite(quantidade) && quantidade > 0;
 }
 
 export function getMovimentacaoClass(tipo: TipoMovimentacao): string {
@@ -88,9 +100,6 @@ export interface EstoqueSummary {
   itensComAlerta: number;
 }
 
-/**
- * Derives aggregate alert counts for a collection of items.
- */
 export function calcEstoqueSummary(itens: ItemEstoque[]): EstoqueSummary {
   const alertas = itens.map(getAlertaEstoque);
   return {
@@ -102,9 +111,6 @@ export function calcEstoqueSummary(itens: ItemEstoque[]): EstoqueSummary {
   };
 }
 
-/**
- * Returns the movements for a specific item, most recent first.
- */
 export function getMovimentacoesDoItem(
   itemId: string,
   movimentacoes: MovimentacaoEstoque[],
@@ -114,9 +120,6 @@ export function getMovimentacoesDoItem(
     .sort((a, b) => b.dataMovimentacao.localeCompare(a.dataMovimentacao));
 }
 
-/**
- * Returns all movements linked to a given OS.
- */
 export function getMovimentacoesDaOS(
   osId: string,
   movimentacoes: MovimentacaoEstoque[],
@@ -124,10 +127,126 @@ export function getMovimentacoesDaOS(
   return movimentacoes.filter(m => m.osId === osId);
 }
 
-/**
- * Formats the signed quantity for display (e.g. "+5" or "-2").
- */
 export function formatMovimentacaoQtd(mov: MovimentacaoEstoque): string {
-  const dir = getMovimentacaoDirecao(mov.tipo);
-  return `${dir > 0 ? '+' : ''}${dir * mov.quantidade}`;
+  const delta = getMovimentacaoDelta(mov.tipo, mov.quantidade);
+  return `${delta > 0 ? '+' : ''}${delta}`;
+}
+
+// ---------------------------------------------------------------------------
+// Domain validation helpers
+// ---------------------------------------------------------------------------
+
+export interface EstoqueOSContext {
+  id: string;
+  numero: string;
+  unidadeId: string;
+  origemVenda: 'otica' | 'externa';
+  itens?: Array<{
+    id: string;
+    estoqueItemId?: string;
+  }>;
+}
+
+export interface EstoqueValidationResult {
+  valid: boolean;
+  message?: string;
+}
+
+export function getUnidadeOperacionalParaBaixaOS(
+  os: EstoqueOSContext,
+  unidadeCentralId: string,
+): string {
+  return os.origemVenda === 'externa' ? unidadeCentralId : os.unidadeId;
+}
+
+export function getOSItemVinculadoAoEstoque(
+  os: EstoqueOSContext | undefined,
+  itemId: string,
+): string | undefined {
+  return os?.itens?.find(item => item.estoqueItemId === itemId)?.id;
+}
+
+export function getItensElegiveisParaMovimentacao(
+  itens: ItemEstoque[],
+  params: {
+    tipo: TipoMovimentacao;
+    selectedUnidadeId: string;
+    currentUserUnidadeId: string;
+    os?: EstoqueOSContext;
+    unidadeCentralId: string;
+  },
+): ItemEstoque[] {
+  if (params.tipo === 'baixa_os' && !params.os) {
+    return [];
+  }
+
+  if (params.tipo === 'baixa_os' && params.os) {
+    const unidadeOperacional = getUnidadeOperacionalParaBaixaOS(params.os, params.unidadeCentralId);
+    const linkedItemIds = params.os.itens
+      ?.map(item => item.estoqueItemId)
+      .filter((itemId): itemId is string => Boolean(itemId));
+    const itensDaUnidade = itens.filter(item => item.ativo && item.unidadeId === unidadeOperacional);
+    return linkedItemIds && linkedItemIds.length > 0
+      ? itensDaUnidade.filter(item => linkedItemIds.includes(item.id))
+      : itensDaUnidade;
+  }
+
+  const unidadeOperacional = params.selectedUnidadeId === 'todas'
+    ? params.currentUserUnidadeId
+    : params.selectedUnidadeId;
+
+  return itens.filter(item => item.ativo && item.unidadeId === unidadeOperacional);
+}
+
+export function validarMovimentacaoEstoque(params: {
+  item: ItemEstoque;
+  tipo: TipoMovimentacao;
+  quantidade: number;
+  os?: EstoqueOSContext;
+  movimentacoes: MovimentacaoEstoque[];
+  unidadeCentralId: string;
+}): EstoqueValidationResult {
+  if (!isQuantidadeMovimentacaoValida(params.quantidade)) {
+    return { valid: false, message: 'Quantidade inválida.' };
+  }
+
+  const delta = getMovimentacaoDelta(params.tipo, params.quantidade);
+  if (params.item.saldoAtual + delta < 0) {
+    return { valid: false, message: 'Saldo insuficiente para registrar a movimentação.' };
+  }
+
+  if (params.tipo !== 'baixa_os') {
+    return { valid: true };
+  }
+
+  if (!params.os) {
+    return { valid: false, message: 'Selecione uma OS existente para registrar baixa por OS.' };
+  }
+
+  const unidadeOperacional = getUnidadeOperacionalParaBaixaOS(params.os, params.unidadeCentralId);
+  if (params.item.unidadeId !== unidadeOperacional) {
+    return params.os.origemVenda === 'externa'
+      ? { valid: false, message: 'OS externa deve consumir apenas estoque da Central/Fábrica.' }
+      : { valid: false, message: 'OS de ótica deve consumir estoque da própria unidade.' };
+  }
+
+  const linkedItemIds = params.os.itens
+    ?.map(item => item.estoqueItemId)
+    .filter((itemId): itemId is string => Boolean(itemId));
+
+  if (linkedItemIds && linkedItemIds.length > 0 && !linkedItemIds.includes(params.item.id)) {
+    return { valid: false, message: 'Item de estoque não está vinculado aos itens desta OS.' };
+  }
+
+  const baixaDuplicada = params.movimentacoes.some(mov =>
+    mov.tipo === 'baixa_os' &&
+    mov.osId === params.os?.id &&
+    mov.itemId === params.item.id
+  );
+
+  if (baixaDuplicada) {
+    return { valid: false, message: 'Já existe baixa por OS para este item nesta sessão.' };
+  }
+
+  return { valid: true };
 }
